@@ -6,6 +6,10 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		48F0D6DA305EF8B000116CAC /* OpenAICompat in Frameworks */ = {isa = PBXBuildFile; productRef = 48F0D6D9305EF8B000116CAC /* OpenAICompat */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		48F0D696305EF65700116CAC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -64,6 +68,7 @@
 		48F0D67C305EF65600116CAC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				48F0D6DA305EF8B000116CAC /* OpenAICompat in Frameworks */,
 			);
 		};
 		48F0D692305EF65700116CAC /* Frameworks */ = {
@@ -85,6 +90,7 @@
 				48F0D681305EF65600116CAC /* PocketServe1 */,
 				48F0D698305EF65700116CAC /* PocketServe1Tests */,
 				48F0D6A2305EF65700116CAC /* PocketServe1UITests */,
+				48F0D6D8305EF8B000116CAC /* Frameworks */,
 				48F0D680305EF65600116CAC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -97,6 +103,13 @@
 				48F0D69F305EF65700116CAC /* PocketServe1UITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		48F0D6D8305EF8B000116CAC /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -116,6 +129,9 @@
 				48F0D681305EF65600116CAC /* PocketServe1 */,
 			);
 			name = PocketServe1;
+			packageProductDependencies = (
+				48F0D6D9305EF8B000116CAC /* OpenAICompat */,
+			);
 			productName = PocketServe1;
 			productReference = 48F0D67F305EF65600116CAC /* PocketServe1.app */;
 			productType = "com.apple.product-type.application";
@@ -194,6 +210,9 @@
 			);
 			mainGroup = 48F0D676305EF65600116CAC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				48F0D6BB305EF77300116CAC /* XCLocalSwiftPackageReference "../Packages/OpenAICompat" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 48F0D680305EF65600116CAC /* Products */;
 			projectDirPath = "";
@@ -266,6 +285,7 @@
 				DEVELOPMENT_TEAM = 862TLS4WWB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PocketServe1/Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Serwer AI dla Twojego komputera";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -298,6 +318,7 @@
 				DEVELOPMENT_TEAM = 862TLS4WWB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PocketServe1/Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Serwer AI dla Twojego komputera";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -561,6 +582,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		48F0D6BB305EF77300116CAC /* XCLocalSwiftPackageReference "../Packages/OpenAICompat" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/OpenAICompat;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		48F0D6D9305EF8B000116CAC /* OpenAICompat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 48F0D6BB305EF77300116CAC /* XCLocalSwiftPackageReference "../Packages/OpenAICompat" */;
+			productName = OpenAICompat;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 48F0D677305EF65600116CAC /* Project object */;
 	validationLevel = 1;
