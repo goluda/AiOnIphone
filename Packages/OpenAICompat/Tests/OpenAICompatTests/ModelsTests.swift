@@ -33,8 +33,9 @@ final class ModelsTests: XCTestCase {
         let r = CompletionResponse(id: "x", created: 1, model: "m",
             choices: [.init(index: 0, message: ChatMessage(role: "assistant", content: "hi"), finishReason: "stop")],
             usage: .init(promptTokens: 2, completionTokens: 3))
-        let d = (try? JSONEncoder().encode(r)).flatMap { String(data: $0, encoding: .utf8) }!
-        XCTAssertTrue(d.contains(#""message":{"role":"assistant","content":"hi"}"#), d)
+        let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
+        let d = (try? enc.encode(r)).flatMap { String(data: $0, encoding: .utf8) }!
+        XCTAssertTrue(d.contains(#""message":{"content":"hi","role":"assistant"}"#), d)
         XCTAssertFalse(d.contains(#""delta""#), d)
     }
 }
