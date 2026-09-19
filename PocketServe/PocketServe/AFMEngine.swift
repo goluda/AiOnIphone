@@ -31,9 +31,9 @@ final class AFMEngine: InferenceEngine, @unchecked Sendable {
 
     func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error> {
         AsyncThrowingStream { continuation in
+            AFMEngine.activeStreams.withLock { $0 += 1 }
             let once = OSAllocatedUnfairLock(initialState: false)
             let task = Task {
-                AFMEngine.activeStreams.withLock { $0 += 1 }
                 defer { AFMEngine.releaseStream(once) } // punkty terminalne do/catch
                 do {
                     guard SystemLanguageModel.default.availability == .available else {
