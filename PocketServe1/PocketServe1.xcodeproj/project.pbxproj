@@ -136,6 +136,7 @@
 			packageProductDependencies = (
 				48F0D6D9305EF8B000116CAC /* OpenAICompat */,
 				48F0D6E2305EFB0000116CAC /* MLXLLM */,
+				48F0D6E4305EFB0000116CAC /* MLXLMCommon */,
 			);
 			productName = PocketServe1;
 			productReference = 48F0D67F305EF65600116CAC /* PocketServe1.app */;
