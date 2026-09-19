@@ -4,7 +4,7 @@ public actor ModelStore {
     public enum Guard: Equatable, Sendable { case ok, tooBig(bytes: Int64), notReady, unknown }
     public enum StoreError: Error, Sendable { case notFound, loaded, io(String) }
 
-    private let root: URL
+    nonisolated let root: URL
     private let loadGuardBytes: Int64
     private var recordsById: [String: ModelRecord] = [:]
 
