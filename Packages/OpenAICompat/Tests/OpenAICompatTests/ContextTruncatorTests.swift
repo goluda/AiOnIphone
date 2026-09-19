@@ -20,6 +20,16 @@ final class ContextTruncatorTests: XCTestCase {
         let kept = ContextTruncator.truncate(messages: [sys, a, b, c], budgetTokens: 36).kept
         XCTAssertEqual(kept.map(\.content), ["S", String(repeating: "c", count: 40)]) // b dropped => a must NOT be kept
     }
+    func testDroppedTokensCountsAllExcludedMessages() {
+        let sys = ChatMessage(role: "system", content: "S")
+        let a = ChatMessage(role: "user", content: String(repeating: "a", count: 40))
+        let b = ChatMessage(role: "user", content: String(repeating: "b", count: 400))
+        let c = ChatMessage(role: "user", content: String(repeating: "c", count: 40))
+        let r = ContextTruncator.truncate(messages: [sys, a, b, c], budgetTokens: 33)
+        XCTAssertEqual(r.kept.map(\.content), ["S", String(repeating: "c", count: 40)]) // a excluded via break
+        let expected = TokenCounter.approximate(a) + TokenCounter.approximate(b)
+        XCTAssertEqual(r.droppedTokens, expected)
+    }
     func testBudgetCoversAllKeepsAll() {
         let ms = [ChatMessage(role: "user", content: "a"), ChatMessage(role: "assistant", content: "b")]
         XCTAssertEqual(ContextTruncator.truncate(messages: ms, budgetTokens: 1000).kept.count, 2)

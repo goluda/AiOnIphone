@@ -5,14 +5,15 @@ public enum ContextTruncator {
         let rest = messages.filter { $0.role != "system" }
         let sysCost = system.reduce(0) { $0 + TokenCounter.approximate($1) }
         var kept: [ChatMessage] = []
-        var dropped = 0
         var cost = sysCost
         for m in rest.reversed() {
             let c = TokenCounter.approximate(m)
             if cost + c <= budgetTokens { cost += c; kept.insert(m, at: 0) }
-            else { dropped += c; break } // stop scanning: keep a strict contiguous newest suffix
+            else { break } // stop scanning: keep a strict contiguous newest suffix
         }
+        let restCost = rest.reduce(0) { $0 + TokenCounter.approximate($1) }
+        let keptCost = kept.reduce(0) { $0 + TokenCounter.approximate($1) }
         system.append(contentsOf: kept)
-        return (system, dropped)
+        return (system, restCost - keptCost) // all messages not kept are dropped
     }
 }
