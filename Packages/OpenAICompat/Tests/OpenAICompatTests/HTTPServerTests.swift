@@ -111,6 +111,29 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertTrue(text.hasPrefix("HTTP/1.1 400"))
         XCTAssertTrue(text.contains("invalid_request_error"))
     }
+    func testServerSideClampTruncatesAndCapsMaxTokens() async throws {
+        let spy = SpyEngine(id: "spy", contextWindow: 64)
+        let s = HTTPServer(engines: [spy])
+        let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        let huge = String(repeating: "abcdefghij", count: 40) // 400 chars per message
+        let msgs = [ChatMessage(role: "system", content: "rules")] +
+            (1...8).map { ChatMessage(role: "user", content: "\($0)-\(huge)") }
+        let body = try JSONEncoder().encode(ChatCompletionRequest(
+            model: "spy",
+            messages: msgs,
+            maxTokens: 99999))
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
+        req.httpMethod = "POST"; req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(try JSONDecoder().decode(CompletionResponse.self, from: data).choices.first?.message.content, "ok")
+        let captured = await spy.captured()
+        XCTAssertEqual(captured.params.maxTokens, 64) // clamp do limitu modelu
+        let unbuilt = PromptBuilder.prompt(from: msgs)
+        XCTAssertLessThan(captured.prompt.count, unbuilt.count) // truncate przed inferencją
+        XCTAssertFalse(captured.prompt.isEmpty) // system message ocala
+    }
     func testClientDisconnectMidStreamKeepsServerUp() async throws {
         let s = HTTPServer(engines: [MockEngine(latency: .milliseconds(120))])
         let port = try await s.start(port: 0); defer { Task { await s.stop() } }
@@ -141,6 +164,27 @@ private func deltaText(_ payloads: [String]) throws -> String {
 }
 
 private struct TestTimeout: Error {}
+
+actor SpyEngine: InferenceEngine {
+    let id: String
+    let contextWindow: Int
+    private var lastPrompt: String?
+    private var lastParams: GenerationParams?
+    init(id: String, contextWindow: Int) { self.id = id; self.contextWindow = contextWindow }
+    func captured() -> (prompt: String, params: GenerationParams) { (lastPrompt ?? "", lastParams ?? GenerationParams(temperature: -1, maxTokens: -1)) }
+    nonisolated func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error> {
+        let actor = self
+        return AsyncThrowingStream { c in
+            Task {
+                await actor.record(prompt: prompt, params: params)
+                for t in ["ok"] where !Task.isCancelled { c.yield(t) }
+                c.finish()
+            }
+        }
+    }
+    private func record(prompt: String, params: GenerationParams) { lastPrompt = prompt; lastParams = params }
+}
+
 
 private func withTimeout<T: Sendable>(_ seconds: Double = 10,
                                        _ op: @escaping @Sendable () async throws -> T) async throws -> T {

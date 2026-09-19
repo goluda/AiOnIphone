@@ -88,8 +88,10 @@ public actor HTTPServer {
         }
         busy = true
         defer { busy = false }
-        let prompt = PromptBuilder.prompt(from: request.messages)
-        let params = GenerationParams(temperature: request.temperature, maxTokens: request.maxTokens)
+        let maxTokens = min(request.maxTokens, engine.contextWindow)
+        let kept = ContextTruncator.truncate(messages: request.messages, budgetTokens: engine.contextWindow - maxTokens).kept
+        let prompt = PromptBuilder.prompt(from: kept)
+        let params = GenerationParams(temperature: request.temperature, maxTokens: maxTokens)
         let id = "chatcmpl-\(UUID().uuidString.prefix(8))"
         let created = Int(Date().timeIntervalSince1970)
         if request.stream {

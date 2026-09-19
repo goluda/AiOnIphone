@@ -2,3 +2,5 @@
 DerivedData/
 xcuserdata/
 .superpowers/
+.swiftpm/
+.DS_Store

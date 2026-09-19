@@ -30,7 +30,10 @@ Otwórz `PocketServe/PocketServe/Info.plist` i wklej zawartość `PocketServe/Po
 2. W apce tapnij **Start**
 3. Przy pierwszym starcie iOS zapyta o **Local Network** → **Allow** (bez grantu curl z LAN padnie)
 4. Na ekranie: `● online :8080` + `<nazwa-iPhone>.local:8080`
-5. IP urządzenia: Ustawienia → Wi‑Fi → (i) → Address
+5. **Potwierdź availability + capabilities AFM**: w konsoli Xcode (albo Console.app, filtr `subsystem == com.pawel.pocketserve AND category == afm`) po pierwszym żądaniu oczekiwana linia:
+   `AFM available; capabilities reasoning=… toolCalling=… vision=…`
+   Jeśli zamiast tego: `AFM unavailable — Apple Intelligence wyłączony` → włącz Apple Intelligence (Ustawienia → Apple Intelligence & Siri) i spróbuj ponownie.
+6. IP urządzenia: Ustawienia → Wi‑Fi → (i) → Address
 
 ## 6. Smoke test z terminala Maca (ten sam LAN)
 ```bash
