@@ -64,14 +64,22 @@ public struct Usage: Codable, Sendable { public let promptTokens: Int
     public init(promptTokens: Int, completionTokens: Int) {
         self.promptTokens = promptTokens; self.completionTokens = completionTokens } }
 
+public struct ResponseChoice: Codable, Sendable { public let index: Int
+    public let message: ChatMessage
+    public let finishReason: String?
+    public init(index: Int, message: ChatMessage, finishReason: String?) {
+        self.index = index; self.message = message; self.finishReason = finishReason }
+    enum CodingKeys: String, CodingKey { case index, message
+        case finishReason = "finish_reason" } }
+
 public struct CompletionResponse: Codable, Sendable {
     public let id: String
     public let object: String
     public let created: Int
     public let model: String
-    public let choices: [ChunkChoice]
+    public let choices: [ResponseChoice]
     public let usage: Usage
-    public init(id: String, created: Int, model: String, choices: [ChunkChoice], usage: Usage) {
+    public init(id: String, created: Int, model: String, choices: [ResponseChoice], usage: Usage) {
         self.id = id; self.object = "chat.completion"; self.created = created
         self.model = model; self.choices = choices; self.usage = usage } }
 
