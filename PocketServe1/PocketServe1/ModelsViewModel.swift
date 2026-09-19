@@ -41,14 +41,43 @@ struct MLXLoading: ModelLoading {
     }
     deinit { if let memObs { NotificationCenter.default.removeObserver(memObs) } }
 
+    enum Op { case start, load, unload, delete }
+    // HTTPServer rozumie wyłącznie ServerAPIError — mostek per-op (spec §5):
+    // delete: notLoaded→modelLoaded; unload: notLoaded→model_not_loaded; reszta wspólna.
+    nonisolated static func bridge(_ e: DownloadAPIError, op: Op) -> ServerAPIError {
+        switch e {
+        case .invalidRequest(let m): return .invalidRequest(m)
+        case .downloadInProgress: return .downloadInProgress
+        case .notReady: return .notReady
+        case .notFound: return .notFound
+        case .memoryPressure: return .memoryPressure
+        case .downloadFailed(let m): return .failed(m)
+        case .http(let c): return .failed("http \(c)")
+        case .io(let m): return .failed(m)
+        case .notLoaded: return op == .delete ? .modelLoaded : .notLoaded
+        }
+    }
+
     static func makeExtension(coordinator: DownloadCoordinator) -> ServerExtension {
         ServerExtension(download: DownloadHandler(
-            start: { repo, rev in try await coordinator.start(repo: repo, revision: rev) },
+            start: { repo, rev in
+                do { try await coordinator.start(repo: repo, revision: rev) }
+                catch let e as DownloadAPIError { throw bridge(e, op: .start) }
+            },
             status: { try ModelJSON.encoder.encode(await coordinator.currentStatus()) },
             records: { try ModelJSON.encoder.encode(await coordinator.records()) },
-            load: { id in try await coordinator.load(id: id) },
-            unload: { id in try await coordinator.unload(id: id) },
-            delete: { id in try await coordinator.delete(id: id) },
+            load: { id in
+                do { try await coordinator.load(id: id) }
+                catch let e as DownloadAPIError { throw bridge(e, op: .load) }
+            },
+            unload: { id in
+                do { try await coordinator.unload(id: id) }
+                catch let e as DownloadAPIError { throw bridge(e, op: .unload) }
+            },
+            delete: { id in
+                do { try await coordinator.delete(id: id) }
+                catch let e as DownloadAPIError { throw bridge(e, op: .delete) }
+            },
             memoryWarning: { await coordinator.notifyMemoryWarning() }),
             // mlx na /v1/models: przez MLXEngine.listedModel (silnik w rejestrze serwera)
             extraModels: { [] })
@@ -65,16 +94,24 @@ struct MLXLoading: ModelLoading {
     }
     func load(_ id: String) { Task { do { try await coordinator.load(id: id) } catch let e as DownloadAPIError { alert = Self.humanize(e) }; await refresh() } }
     func unload(_ id: String) { Task { try? await coordinator.unload(id: id); await refresh() } }
-    func deleteFiles(_ id: String) { Task { do { try await coordinator.delete(id: id) } catch { alert = "nie można usunąć — najpierw odładuj model" }; await refresh() } }
+    func deleteFiles(_ id: String) { Task { do { try await coordinator.delete(id: id) } catch let e as DownloadAPIError { alert = Self.humanize(e) } catch { alert = "nie można usunąć — najpierw odładuj model" }; await refresh() } }
     static func humanize(_ e: DownloadAPIError) -> String {
         switch e {
         case .invalidRequest: return "to nie jest poprawne repo mlx"
         case .memoryPressure: return "model za duży — wybierz mniejszą kwantyzację"
         case .downloadInProgress: return "pobieranie już w toku"
-        default: return "operacja niedostępna: \(e)"
+        case .notReady: return "pobieranie nie ukończone"
+        case .notFound: return "model nie znaleziony"
+        case .notLoaded: return "najpierw odładuj model"
+        case .downloadFailed: return "pobieranie nie powiodło się — ponów import"
+        case .http(let c): return "serwer HF odpowiedział błędem \(c)"
+        case .io: return "błąd dysku"
         }
     }
-    private func pollStatus() { poll = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+    private func pollStatus() {
+        guard status.state == .downloading || status.state == .verifying else { return }
+        poll?.invalidate()
+        poll = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
         Task { @MainActor in guard let self else { return }
             await self.refresh()
             if self.status.state == .ready || self.status.state == .failed { self.poll?.invalidate() }

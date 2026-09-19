@@ -23,6 +23,7 @@ import Combine
         Task { [weak self] in
             guard let self else { return }
             await old.stop()
+            guard self.running else { return } // użytkownik nacisnął Stop w trakcie restartu — nie wznawiaj nasłuchu
             do { self.port = try await self.server.start(port: oldPort) } catch { self.running = false }
         }
     }

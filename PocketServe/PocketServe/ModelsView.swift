@@ -9,7 +9,7 @@ struct ModelsView: View {
                 Text("Niska pamięć — model odładowany automatycznie")
                     .font(.caption).foregroundStyle(.white)
                     .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.orange, in: RoundedRectangle(cornerRadius: 8))
+                    .background(.red, in: RoundedRectangle(cornerRadius: 8))
             }
             Section("Import z Hugging Face") {
                 TextField("np. mlx-community/Qwen3-1.7B-4bit", text: $vm.repoInput)
@@ -41,6 +41,7 @@ struct ModelsView: View {
             }
         }
         .navigationTitle("Modele")
+        .navigationSubtitle(vm.records.first(where: { $0.loaded })?.repo ?? "tylko apple-afm") // spec §6: nagłówek = załadowany model albo fallback
         .task { await vm.refresh() }
         .alert("Błąd", isPresented: .init(get: { vm.alert != nil }, set: { if !$0 { vm.alert = nil } })) { Button("OK") { vm.alert = nil } } message: { Text(vm.alert ?? "") }
     }

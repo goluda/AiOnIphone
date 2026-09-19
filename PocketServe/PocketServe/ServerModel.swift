@@ -7,10 +7,29 @@ import Combine
     @Published var running = false
     @Published var port: UInt16 = 8080
     @Published var address = "—"
-    private let server = HTTPServer(engines: [AFMEngine()])
+    private var server: HTTPServer
+    private var ext: ServerExtension?
     private var netService: NetService?
+    private(set) lazy var viewModel = ModelsViewModel(serverModel: self) // init VM woła attach — oficjalny kanał montażu
+
+    override init() { server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared]) }
+
+    func attach(extension: ServerExtension) {
+        ext = `extension`
+        let old = server // wymiana synchroniczna → start() widzi już serwer z ext
+        server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared], extension: `extension`)
+        guard running else { return }
+        let oldPort = port
+        Task { [weak self] in
+            guard let self else { return }
+            await old.stop()
+            guard self.running else { return } // użytkownik nacisnął Stop w trakcie restartu — nie wznawiaj nasłuchu
+            do { self.port = try await self.server.start(port: oldPort) } catch { self.running = false }
+        }
+    }
 
     func start() {
+        _ = viewModel // montuj /x/* zanim server.start()
         _ = Task { do { port = try await server.start(port: 8080); address = Self.localIPAddress() ?? "brak LAN"; running = true; publishBonjour() } } // brief: błąd ignorowany jawnie
     }
     func stop() { netService?.stop(); Task { await server.stop() }; running = false }
