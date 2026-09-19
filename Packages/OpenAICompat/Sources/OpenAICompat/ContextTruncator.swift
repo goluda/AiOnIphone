@@ -1,5 +1,3 @@
-import Foundation
-
 public enum ContextTruncator {
     public static func truncate(messages: [ChatMessage], budgetTokens: Int)
         -> (kept: [ChatMessage], droppedTokens: Int) {
@@ -12,7 +10,7 @@ public enum ContextTruncator {
         for m in rest.reversed() {
             let c = TokenCounter.approximate(m)
             if cost + c <= budgetTokens { cost += c; kept.insert(m, at: 0) }
-            else { dropped += c }
+            else { dropped += c; break } // stop scanning: keep a strict contiguous newest suffix
         }
         system.append(contentsOf: kept)
         return (system, dropped)

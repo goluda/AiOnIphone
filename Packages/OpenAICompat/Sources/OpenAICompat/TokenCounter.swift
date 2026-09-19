@@ -1,5 +1,3 @@
-import Foundation
-
 public enum TokenCounter {
     public static func approximate(_ text: String) -> Int { max(1, text.count / 4) }
     public static func approximate(_ message: ChatMessage) -> Int {
