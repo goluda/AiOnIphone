@@ -20,8 +20,15 @@ public actor HTTPServer {
             let gate = StartGate(cont) // resume-once guard: .failed after .ready must not double-resume
             listener.stateUpdateHandler = { (state: NWListener.State) in
                 switch state {
-                case .ready: if let p = listener.port { gate.resume(.success(p.rawValue)) }
-                case .failed(let e): gate.resume(.failure(e))
+                case .ready:
+                    listener.stateUpdateHandler = nil // break listener -> handler -> listener retain cycle
+                    if let p = listener.port { gate.resume(.success(p.rawValue)) }
+                case .failed(let e):
+                    listener.stateUpdateHandler = nil
+                    gate.resume(.failure(e))
+                case .cancelled:
+                    listener.stateUpdateHandler = nil
+                    gate.resume(.failure(NWError.posix(.ECANCELED)))
                 default: break
                 }
             }
@@ -57,6 +64,9 @@ public actor HTTPServer {
     }
 
     private func route(_ req: HTTPRequest, _ conn: NWConnection) async {
+        if req.method == "GET", req.path == "/health" {
+            sendJSON(conn, 200, Data(#"{"status":"ok"}"#.utf8)); return
+        }
         if let cl = req.headers["content-length"], Int(cl) == nil {
             sendError(conn, 400, "invalid_request_error"); return
         }

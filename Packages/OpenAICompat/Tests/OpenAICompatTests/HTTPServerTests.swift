@@ -83,6 +83,25 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual((respC as? HTTPURLResponse)?.statusCode, 200)
         XCTAssertEqual(try JSONDecoder().decode(CompletionResponse.self, from: dataC).choices.first?.message.content, "To jest mock")
     }
+    func testHealthReturns200() async throws {
+        let s = makeServer(); let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        let (data, resp) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/health")!)
+        XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(String(data: data, encoding: .utf8), "{\"status\":\"ok\"}")
+    }
+    func testHealth200WhileChatInFlight() async throws {
+        let s = HTTPServer(engines: [MockEngine(latency: .milliseconds(150))])
+        let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        let streamBody = try JSONEncoder().encode(ChatCompletionRequest(model: "mock", messages: [ChatMessage(role: "user", content: "x")], stream: true))
+        let a = try await rawConnect(port: port); defer { a.cancel() }
+        a.send(content: rawPOST(path: "/v1/chat/completions", body: streamBody), completion: .contentProcessed { _ in })
+        let head = try await rawReceive(a)
+        XCTAssertTrue(String(data: head, encoding: .utf8)!.hasPrefix("HTTP/1.1 200")) // SSE head arrived => busy acquired
+        let (data, resp) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/health")!)
+        XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200) // health ungated while busy
+        XCTAssertEqual(String(data: data, encoding: .utf8), "{\"status\":\"ok\"}")
+        _ = try await receiveAll(a) // drain stream
+    }
     func testMalformedContentLengthRejected400() async throws {
         let s = makeServer(); let port = try await s.start(port: 0); defer { Task { await s.stop() } }
         let conn = try await rawConnect(port: port); defer { conn.cancel() }
