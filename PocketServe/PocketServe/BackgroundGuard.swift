@@ -8,10 +8,9 @@ import UIKit
 /// stream; po `.active` (lub OS expiry) task jest kończony.
 /// NIE restartuje żądań — zerwany stream = endpoint pada (feature, DoD).
 ///
-/// Uwaga Phase 1: obserwujemy `serverRunning`, nie pojedynczy stream
-/// (HTTPServer nie eksponuje jeszcze licznika aktywnych połączeń —
-/// przyszły hook). Grant w tle kończy się na expiry OS = stream
-/// kończony naturalnie, bez ponownego wysłania żądania.
+/// Grant tylko w oknie aktywnego streamu: `.background` + `serverRunning`
+/// + `AFMEngine.hasActiveStream`. Stream kończy się w tle →
+/// `streamDidEnd()` zwalnia grant natychmiast (nie czeka na expiry OS).
 ///
 /// Wiring (ContentView): `@Environment(\.scenePhase)` + `.onChange(of: scenePhase)`
 /// → `BackgroundGuard.shared.handle(phase, serverRunning: model.running)`.
@@ -23,13 +22,19 @@ final class BackgroundGuard {
     func handle(_ phase: ScenePhase, serverRunning: Bool) {
         switch phase {
         case .background:
-            guard serverRunning else { return } // brak serwera = brak streamu do ochrony
+            guard serverRunning && AFMEngine.hasActiveStream else { return } // tylko aktywny stream = grant
             begin()
         case .active, .inactive:
             end() // foreground = grant zbędny
         @unknown default:
             end()
         }
+    }
+
+    /// Wywoływane przez AFMEngine gdy ostatni aktywny stream się skończy —
+    /// grant w tle jest zbędny od zaraz.
+    func streamDidEnd() {
+        end()
     }
 
     private func begin() {
