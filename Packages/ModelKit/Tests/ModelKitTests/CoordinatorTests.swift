@@ -15,6 +15,16 @@ final class IdLoader: ModelLoading {
     var loadedId: String? { id }
 }
 
+final class SlowLoader: ModelLoading {
+    nonisolated(unsafe) var loadCalls = 0
+    func load(_ record: ModelRecord) async throws {
+        loadCalls += 1
+        try await Task.sleep(nanoseconds: 100_000_000)
+    }
+    func unload() async {}
+    var loadedId: String? { nil }
+}
+
 final class HangingHF: URLProtocol {
     nonisolated(unsafe) static var files: [String: Data] = [:]
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -85,6 +95,9 @@ final class CoordinatorTests: XCTestCase {
         try FileManager.default.createDirectory(at: root.appendingPathComponent("models"), withIntermediateDirectories: true)
         let store = ModelStore(root: root)
         await store.upsert(ModelRecord(id: "mlx:z", repo: "z", revision: "r", quant: nil, bytesOnDisk: 5, downloadedAt: Date(), state: .ready))
+        let modelDir = root.appendingPathComponent("models").appendingPathComponent("z")
+        try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: modelDir.appendingPathComponent("model.safetensors"))
         let loader = IdLoader()
         let c = DownloadCoordinator(downloader: nil, store: store, loader: loader)
         try await c.load(id: "mlx:z")
@@ -93,7 +106,40 @@ final class CoordinatorTests: XCTestCase {
         await c.notifyMemoryWarning()
         let r = await store.records()
         XCTAssertEqual(r.first?.loaded, false)
-        XCTAssertNotNil(r.first) // pliki zostają
+        XCTAssertNotNil(r.first)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: modelDir.appendingPathComponent("model.safetensors").path)) // pliki zostają
+    }
+
+    func testLoadSlotRejectsConcurrentLoads() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("models"), withIntermediateDirectories: true)
+        let store = ModelStore(root: root)
+        await store.upsert(ModelRecord(id: "mlx:s", repo: "s", revision: "r", quant: nil, bytesOnDisk: 5, downloadedAt: Date(), state: .ready))
+        let loader = SlowLoader()
+        let c = DownloadCoordinator(downloader: nil, store: store, loader: loader)
+        let t1 = Task { () -> Result<Void, Error> in do { try await c.load(id: "mlx:s"); return .success(()) } catch { return .failure(error) } }
+        let t2 = Task { () -> Result<Void, Error> in do { try await c.load(id: "mlx:s"); return .success(()) } catch { return .failure(error) } }
+        let outcomes = [await t1.value, await t2.value]
+        var successes = 0, inProgress = 0
+        for o in outcomes {
+            switch o {
+            case .success: successes += 1
+            case .failure(let e):
+                if (e as? DownloadAPIError) == .downloadInProgress { inProgress += 1 } else { XCTFail("\(e)") }
+            }
+        }
+        XCTAssertEqual(successes, 1)
+        XCTAssertEqual(inProgress, 1)
+        XCTAssertEqual(loader.loadCalls, 1) // odrzucony nie dotarł do loadera
+    }
+
+    func testStartNormalizesRawErrors() async throws {
+        let (c, _, _) = makeCoordinator()
+        do { try await c.start(repo: "bad repo!", revision: "rev"); XCTFail() }
+        catch DownloadAPIError.invalidRequest(let m) { XCTAssertEqual(m, "repo: bad repo!") }
+        FakeHF.files["/api/models/a/b/revision/rev"] = nil
+        do { try await c.start(repo: "a/b", revision: "rev"); XCTFail() }
+        catch DownloadAPIError.downloadFailed {}
     }
 
     func testInProgressPassthrough() async throws {

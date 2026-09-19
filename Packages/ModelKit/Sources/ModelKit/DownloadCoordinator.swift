@@ -24,6 +24,7 @@ public actor DownloadCoordinator: DownloadAPI {
     private let downloader: HFDownloader?
     private let store: ModelStore
     private let loader: ModelLoading
+    private var loadSlotBusy = false
 
     public init(downloader: HFDownloader?, store: ModelStore, loader: ModelLoading) {
         self.downloader = downloader; self.store = store; self.loader = loader
@@ -32,15 +33,17 @@ public actor DownloadCoordinator: DownloadAPI {
     public func start(repo: String, revision: String?) async throws {
         guard let dl = downloader else { throw DownloadAPIError.invalidRequest("no downloader") }
         do { try await dl.start(repo: repo, revision: revision ?? "main") }
-        catch HFDownloaderError.inProgress { throw DownloadAPIError.downloadInProgress }
-        catch HFDownloaderError.notMLX { throw DownloadAPIError.invalidRequest("repo bez plików mlx") }
         catch let e as HFDownloaderError {
             switch e {
+            case .inProgress: throw DownloadAPIError.downloadInProgress
+            case .alreadyReady: throw DownloadAPIError.downloadFailed("already ready")
+            case .notMLX: throw DownloadAPIError.invalidRequest("repo bez plików mlx")
             case .http(let c): throw DownloadAPIError.http(c)
             case .checksum(let f): throw DownloadAPIError.downloadFailed("checksum \(f)")
-            default: throw DownloadAPIError.downloadFailed("\(e)")
             }
         }
+        catch RepoValidationError.badFormat { throw DownloadAPIError.invalidRequest("repo: \(repo)") }
+        catch let e as URLError { throw DownloadAPIError.downloadFailed(e.localizedDescription) }
     }
 
     public func currentStatus() async -> DownloadStatus {
@@ -50,6 +53,9 @@ public actor DownloadCoordinator: DownloadAPI {
     public func records() async -> [ModelRecord] { await store.records() }
 
     public func load(id: String) async throws {
+        guard !loadSlotBusy else { throw DownloadAPIError.downloadInProgress }
+        loadSlotBusy = true
+        defer { loadSlotBusy = false }
         switch await store.canLoad(id) {
         case .unknown: throw DownloadAPIError.notFound
         case .notReady: throw DownloadAPIError.notReady
@@ -70,6 +76,9 @@ public actor DownloadCoordinator: DownloadAPI {
     }
 
     public func delete(id: String) async throws {
+        guard !loadSlotBusy else { throw DownloadAPIError.downloadInProgress }
+        loadSlotBusy = true
+        defer { loadSlotBusy = false }
         guard let rec = (await store.records()).first(where: { $0.id == id }) else { throw DownloadAPIError.notFound }
         guard !rec.loaded else { throw DownloadAPIError.notLoaded }
         let dir = store.root.appendingPathComponent("models").appendingPathComponent(RepoValidator.safeDirName(rec.repo))
