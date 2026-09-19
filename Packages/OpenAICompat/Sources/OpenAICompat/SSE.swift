@@ -7,6 +7,14 @@ public enum SSEEncoder {
         var out = Data("data: ".utf8); out.append(json); out.append("\n\n".data(using: .utf8)!)
         return out
     }
+    // I-1: błąd w trakcie streamu → event OpenAI {"error":{...}} w ramach otwartego SSE (nagłówki 200 wysłane).
+    public static func encodeError(_ message: String, type: String = "server_error") -> Data {
+        struct Err: Encodable { let message: String; let type: String }
+        struct Body: Encodable { let error: Err }
+        var json = try! JSONEncoder().encode(Body(error: Err(message: message, type: type)))
+        var out = Data("data: ".utf8); out.append(json); out.append("\n\n".data(using: .utf8)!)
+        return out
+    }
 }
 
 public struct SSEParser {

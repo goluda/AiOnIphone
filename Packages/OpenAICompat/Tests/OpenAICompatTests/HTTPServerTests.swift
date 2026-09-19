@@ -34,6 +34,20 @@ final class HTTPServerTests: XCTestCase {
         text += try deltaText(parser.feed(Data("\n".utf8)))
         XCTAssertEqual(text, "To jest mock")
     }
+    // I-1: silnik rzuca w trakcie streamu → klient dostaje event {"error":...} + [DONE], czyste EOF (bez RST).
+    func testMidStreamEngineThrowEmitsErrorChunkAndDone() async throws {
+        let s = HTTPServer(engines: [ThrowingEngine()]); let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
+        req.httpMethod = "POST"; req.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "boom", messages: [ChatMessage(role: "user", content: "x")], stream: true))
+        let (bytes, resp) = try await URLSession.shared.bytes(for: req)
+        XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
+        var raw = ""
+        for try await line in bytes.lines { raw += line + "\n" } // RST = throw w tej pętli; czyste EOF = brak error
+        XCTAssertTrue(raw.contains("czesc"), "fragment przed throwem dotarł")
+        XCTAssertTrue(raw.contains("\"error\""))
+        XCTAssertTrue(raw.contains("server_error"))
+        XCTAssertTrue(raw.contains("[DONE]"))
+    }
     func testUnknownModel404() async throws {
         let s = makeServer(); let port = try await s.start(port: 0); defer { Task { await s.stop() } }
         var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
@@ -229,6 +243,18 @@ final class PlaceholderMLXEngine: InferenceEngine, @unchecked Sendable { // siln
     func setLoaded(_ v: Bool) { loaded.withLock { $0 = v } }
     nonisolated func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error> {
         AsyncThrowingStream { $0.yield("mlx-ok"); $0.finish() }
+    }
+}
+final class ThrowingEngine: InferenceEngine, @unchecked Sendable { // I-1: yield "czesc" potem throw w trakcie
+    let id = "boom"; let contextWindow = 4096
+    nonisolated func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { c in
+            Task {
+                c.yield("czesc")
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                c.finish(throwing: NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "boom"]))
+            }
+        }
     }
 }
 

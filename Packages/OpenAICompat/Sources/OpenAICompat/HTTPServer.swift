@@ -155,7 +155,10 @@ public actor HTTPServer {
                 conn.send(content: try SSEEncoder.encode(end), completion: .contentProcessed { _ in })
                 conn.send(content: SSEEncoder.done, completion: .contentProcessed { _ in conn.cancel() })
             } catch {
-                conn.cancel()
+                // I-1: silnik rzucił w trakcie streamu → SSE error event + [DONE], czyste zamknięcie (bez RST).
+                let msg = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                conn.send(content: SSEEncoder.encodeError(msg), completion: .contentProcessed { _ in })
+                conn.send(content: SSEEncoder.done, completion: .contentProcessed { _ in conn.cancel() })
             }
         } else {
             var full = ""
