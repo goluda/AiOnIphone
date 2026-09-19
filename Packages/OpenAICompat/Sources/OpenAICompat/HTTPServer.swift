@@ -3,12 +3,14 @@ import Network
 
 public actor HTTPServer {
     private let engines: [String: any InferenceEngine]
+    private let ext: ServerExtension?
     private var listener: NWListener?
     private var busy = false
     public private(set) var port: UInt16?
 
-    public init(engines: [any InferenceEngine]) {
+    public init(engines: [any InferenceEngine], extension ext: ServerExtension? = nil) {
         self.engines = Dictionary(uniqueKeysWithValues: engines.map { ($0.id, $0) })
+        self.ext = ext
     }
 
     public func start(port: UInt16) async throws -> UInt16 {
@@ -71,10 +73,49 @@ public actor HTTPServer {
             sendError(conn, 400, "invalid_request_error"); return
         }
         if req.method == "GET", req.path == "/v1/models" {
-            let list = ModelsList(data: engines.values
+            var list = engines.values
                 .sorted { $0.id < $1.id }
-                .map { ModelInfo(id: $0.id, created: 0, contextWindow: $0.contextWindow) })
-            sendJSON(conn, 200, try! JSONEncoder().encode(list)); return
+                .map { ModelInfo(id: $0.id, created: 0, contextWindow: $0.contextWindow) }
+            if let ext { list += ext.extraModels() }
+            sendJSON(conn, 200, try! JSONEncoder().encode(ModelsList(data: list))); return
+        }
+        if req.path.hasPrefix("/x/") {
+            guard let dl = ext?.download else {
+                sendError(conn, 501, "not_implemented"); return // Faza-1 default: serwer bez /x/*
+            }
+            do {
+                switch (req.method, req.path) {
+                case ("GET", "/x/models"):
+                    sendRaw(conn, 200, try await dl.records(), type: "application/json")
+                case ("GET", "/x/download/status"):
+                    sendRaw(conn, 200, try await dl.status(), type: "application/json")
+                case ("POST", "/x/download"):
+                    struct DReq: Decodable { let repo: String; let revision: String? }
+                    let d: DReq
+                    do { d = try JSONDecoder().decode(DReq.self, from: req.body) }
+                    catch { throw ServerAPIError.invalidRequest("repo wymagane") }
+                    try await dl.start(d.repo, d.revision)
+                    sendRaw(conn, 202, Data(#"{"accepted":true}"#.utf8), type: "application/json")
+                case ("POST", "/x/models/load"):
+                    try await dl.load(try Self.decodeId(req.body))
+                    sendRaw(conn, 202, Data(#"{"loading":true}"#.utf8), type: "application/json")
+                case ("POST", "/x/models/unload"):
+                    try await dl.unload(try Self.decodeId(req.body))
+                    sendRaw(conn, 200, Data(#"{"unloaded":true}"#.utf8), type: "application/json")
+                case ("DELETE", let p) where p.hasPrefix("/x/models/"):
+                    let id = String(p.dropFirst("/x/models/".count)).removingPercentEncoding ?? ""
+                    guard !id.isEmpty else { throw ServerAPIError.invalidRequest("id wymagane") }
+                    try await dl.delete(id)
+                    sendRaw(conn, 200, Data(#"{"deleted":true}"#.utf8), type: "application/json")
+                default:
+                    sendError(conn, 404, "not_found")
+                }
+            } catch let e as ServerAPIError {
+                sendRaw(conn, e.httpStatus, try! JSONEncoder().encode(OpenAIErrorBody(message: "\(e)", type: e.type)), type: "application/json")
+            } catch {
+                sendRaw(conn, 500, try! JSONEncoder().encode(OpenAIErrorBody(message: "\(error)", type: "server_error")), type: "application/json")
+            }
+            return // /x/* never busy-gated
         }
         guard req.method == "POST", req.path == "/v1/chat/completions" else {
             sendError(conn, 404, "not_found"); return
@@ -125,6 +166,19 @@ public actor HTTPServer {
     private func sendJSON(_ conn: NWConnection, _ status: Int, _ body: Data) {
         let h = "HTTP/1.1 \(status) \r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
         conn.send(content: Data(h.utf8) + body, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
+    }
+
+    private func sendRaw(_ conn: NWConnection, _ status: Int, _ body: Data, type: String) {
+        let h = "HTTP/1.1 \(status) \r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
+        conn.send(content: Data(h.utf8) + body, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
+    }
+
+    private static func decodeId(_ body: Data) throws -> String {
+        struct IdReq: Decodable { let id: String }
+        guard let d = try? JSONDecoder().decode(IdReq.self, from: body), !d.id.isEmpty else {
+            throw ServerAPIError.invalidRequest("id wymagane")
+        }
+        return d.id
     }
 
     private func sendError(_ conn: NWConnection, _ status: Int, _ type: String) {
