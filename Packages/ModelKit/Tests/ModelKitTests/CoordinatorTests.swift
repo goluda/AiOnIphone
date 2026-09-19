@@ -161,4 +161,16 @@ final class CoordinatorTests: XCTestCase {
         session.invalidateAndCancel()
         try? await first.value
     }
+
+    // M-2: ponowny start na gotowym modelu = sukces idempotentny (bez ponownego pobierania).
+    func testStartOnReadyModelIsIdempotentSuccess() async throws {
+        let (c, store, _) = makeCoordinator()
+        try await c.start(repo: "a/b", revision: "rev")
+        FakeHF.files = [:] // cokolwiek by nie wróciło z HF — nie wolno ponawiać pobierania
+        try await c.start(repo: "a/b", revision: "rev") // nie rzuca: alreadyReady → 200/202 idempotentnie
+        let st = await c.currentStatus()
+        XCTAssertEqual(st.state, .ready)
+        let recs = await store.records()
+        XCTAssertEqual(recs.first?.state, .ready)
+    }
 }

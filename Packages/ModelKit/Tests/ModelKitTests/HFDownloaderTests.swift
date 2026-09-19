@@ -15,7 +15,7 @@ final class HFDownloaderTests: XCTestCase {
         """#.utf8),
                         "/\(repo)/resolve/rev/config.json": cfg,
                         "/\(repo)/resolve/rev/model.safetensors": Data(repeating: 0xAB, count: 1000)]
-        FakeHF.ignoreRange = false; FakeHF.failOncePath = nil; FakeHF.lastRangeHeader = nil
+        FakeHF.ignoreRange = false; FakeHF.failOncePath = nil; FakeHF.lastRangeHeader = nil; FakeHF.lastRequests = []
         var config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [FakeHF.self]
         let session = URLSession(configuration: config)
@@ -104,5 +104,42 @@ final class HFDownloaderTests: XCTestCase {
         let noLfs = Data(#"{"siblings":[{"rfilename":"config.json","size":5}]}"#.utf8)
         let info2 = try ModelJSON.decoder.decode(HFModelInfo.self, from: noLfs)
         XCTAssertNil(info2.siblings.first?.lfsOid)
+    }
+
+    // C-1: real-world shape — config KANONICZNEGO mlx-community (brak substringu "mlx", fingerprint "quantization").
+    func testRealWorldQuantizationConfigAccepted() async throws {
+        FakeHF.files["/\(repo)/resolve/rev/config.json"] =
+            Data(#"{"model_type":"qwen3","quantization":{"quant-method":"mixed_3_8bit"}}"#.utf8)
+        try await downloader.start(repo: repo, revision: "rev")
+        let st = await downloader.currentStatus()
+        XCTAssertEqual(st.state, .ready)
+    }
+
+    func testPlainLlamaConfigRejected() async throws {
+        FakeHF.files["/\(repo)/resolve/rev/config.json"] = Data(#"{"model_type":"llama"}"#.utf8)
+        do { try await downloader.start(repo: repo, revision: "rev"); XCTFail() } catch HFDownloaderError.notMLX {}
+    }
+
+    // C-1 gate trwardy: quant fingerprint bez safetensors sibling → nadal notMLX.
+    func testQuantConfigStillRequiresSafetensorsSibling() async throws {
+        FakeHF.files["/\(repo)/resolve/rev/config.json"] =
+            Data(#"{"model_type":"qwen3","quantization":{"quant-method":"mixed_3_8bit"}}"#.utf8)
+        FakeHF.files["/api/models/\(repo)/revision/rev"] = Data(#"""
+        {"siblings":[{"rfilename":"config.json","size":60}]}
+        """#.utf8)
+        do { try await downloader.start(repo: repo, revision: "rev"); XCTFail() } catch HFDownloaderError.notMLX {}
+    }
+
+    // C-2: fetchModelInfo musi iść z ?blobs=true (bez tego siblings bez size/lfs.oid).
+    func testModelInfoFetchCarriesBlobsQuery() async throws {
+        try await downloader.start(repo: repo, revision: "rev")
+        XCTAssertTrue(FakeHF.lastRequests.contains { $0.path == "/api/models/\(repo)/revision/rev" && $0.query == "blobs=true" },
+                    "brak ?blobs=true w \(FakeHF.lastRequests.map(\.absoluteString))")
+    }
+
+    // M-2: ponowny start na gotowym modelu = sukces idempotentny przez koordynatora; downloader rzuca alreadyReady.
+    func testAlreadyReadyThrowsAtDownloader() async throws {
+        try await downloader.start(repo: repo, revision: "rev")
+        do { try await downloader.start(repo: repo, revision: "rev"); XCTFail() } catch HFDownloaderError.alreadyReady {}
     }
 }

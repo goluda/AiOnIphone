@@ -19,6 +19,11 @@ public actor HFDownloader {
     public func start(repo: String, revision: String) async throws {
         try RepoValidator.validate(repo)
         if case .downloading = status.state { throw HFDownloaderError.inProgress }
+        // M-2: gotowy rekord w store → alreadyReady (koordynator traktuje to jako sukces idempotentny).
+        let rid = "mlx:\(repo)"
+        if await store.records().contains(where: { $0.id == rid && $0.revision == revision && $0.state == .ready }) {
+            throw HFDownloaderError.alreadyReady
+        }
         status = DownloadStatus(state: .downloading, repo: repo, bytesDone: 0, bytesTotal: 0)
         var done: Int64 = 0
         var total: Int64 = 0

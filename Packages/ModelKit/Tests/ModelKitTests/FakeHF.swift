@@ -5,11 +5,13 @@ final class FakeHF: URLProtocol {
     nonisolated(unsafe) static var failOncePath: String?
     nonisolated(unsafe) static var ignoreRange = false
     nonisolated(unsafe) static var lastRangeHeader: String?
+    nonisolated(unsafe) static var lastRequests: [URL] = []     // C-2: pełne URL z query (path keys są query-blind)
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         let path = request.url!.path
+        FakeHF.lastRequests.append(request.url!)
         guard var data = FakeHF.files[path] else {
             client?.urlProtocol(self, didFailWithError: URLError(.fileDoesNotExist)); return
         }

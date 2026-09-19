@@ -36,7 +36,9 @@ public actor DownloadCoordinator: DownloadAPI {
         catch let e as HFDownloaderError {
             switch e {
             case .inProgress: throw DownloadAPIError.downloadInProgress
-            case .alreadyReady: throw DownloadAPIError.downloadFailed("already ready")
+            // M-2: alreadyReady = sukces idempotentny — pliki już gotowe, NIE pobieramy ponownie,
+            // status zostaje .ready, endpoint odpowiada normalnie (202).
+            case .alreadyReady: return
             case .notMLX: throw DownloadAPIError.invalidRequest("repo bez plików mlx")
             case .http(let c): throw DownloadAPIError.http(c)
             case .checksum(let f): throw DownloadAPIError.downloadFailed("checksum \(f)")

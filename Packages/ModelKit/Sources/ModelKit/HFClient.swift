@@ -19,8 +19,10 @@ public actor HFClient {
         self.session = session; self.base = base
     }
     public func fetchModelInfo(_ repo: String, revision: String) async throws -> HFModelInfo {
-        let url = base.appendingPathComponent("api/models/\(repo)/revision/\(revision)")
-        let (data, resp) = try await session.data(from: url)
+        // ?blobs=true: bez tego siblings NIE mają size ani lfs.oid → checksumy martwe na żywych modelach (C-2).
+        var comp = URLComponents(url: base.appendingPathComponent("api/models/\(repo)/revision/\(revision)"), resolvingAgainstBaseURL: false)!
+        comp.queryItems = (comp.queryItems ?? []) + [URLQueryItem(name: "blobs", value: "true")]
+        let (data, resp) = try await session.data(from: comp.url!)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw HFDownloaderError.http((resp as? HTTPURLResponse)?.statusCode ?? -1) }
         return try ModelJSON.decoder.decode(HFModelInfo.self, from: data)
     }
@@ -31,7 +33,10 @@ public actor HFClient {
     }
     public func isMLX(_ repo: String, revision: String) async -> Bool {
         guard let cfg = await configText(repo, revision: revision) else { return false }
-        return cfg.contains("\"mlx\"") || cfg.contains("mlx_")
+        // C-1: prawdziwe mlx-community/kwantyzowane config.json NIE zawierają "mlx" —
+        // fingerprint = klucz "quantization" (np. {"model_type":"qwen3","quantization":{...}}).
+        // Twardy gate SAFETENSORS-siblings zostaje w HFDownloader.start.
+        return cfg.contains("\"quantization\"") || cfg.contains("mlx")
     }
 }
 
