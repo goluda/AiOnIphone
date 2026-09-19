@@ -4,6 +4,7 @@ import MLXLLM
 import MLXLMCommon
 import MLXRandom
 import OpenAICompat
+import os
 
 // mlx-swift-examples 2.29.1 (mlx-swift 0.29.1) — API zweryfikowane w SourcePackages/checkouts:
 // - `LLMModel` JEST TYLKO protokołem-markera (MLXLLM/LLMModel.swift); ładowanie i generacja
@@ -23,10 +24,29 @@ final class MLXEngine: InferenceEngine, @unchecked Sendable {
     private static var _loadedId: String?   // "mlx:<repo>" albo nil
     private static var _container: ModelContainer?
 
-    // Licznik aktywnych streamów — straż unload vs trwająca generacja (/x/unload).
+    // Licznik aktywnych streamów — straż unload vs trwająca generacja (/x/unload)
+    // + BackgroundGuard (I-2: grant w tle TYLKO w oknie generowania, wzór AFMEngine 1:1).
     private static let streamsLock = NSLock()
     private static var _activeStreams = 0
-    private static var activeStreams: Int { streamsLock.withLock { _activeStreams } }
+    nonisolated static var activeStreams: Int { streamsLock.withLock { _activeStreams } }
+    nonisolated var activeStreams: Int { Self.activeStreams }
+
+    // Dekrement dokładnie raz per stream (onTermination + punkty terminalne do/catch) — wzór AFMEngine.
+    private static func releaseStream(_ once: OSAllocatedUnfairLock<Bool>) {
+        let first = once.withLock { flag -> Bool in
+            if flag { return false }
+            flag = true
+            return true
+        }
+        guard first else { return }
+        let remaining = streamsLock.withLock { () -> Int in
+            _activeStreams -= 1
+            return _activeStreams
+        }
+        if remaining == 0 {
+            Task { @MainActor in BackgroundGuard.shared.streamDidEnd() }
+        }
+    }
 
     nonisolated static var loadedId: String? { lock.withLock { _loadedId } }
 
@@ -59,9 +79,10 @@ final class MLXEngine: InferenceEngine, @unchecked Sendable {
 
     nonisolated func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error> {
         AsyncThrowingStream { continuation in
+            Self.streamsLock.withLock { Self._activeStreams += 1 }
+            let once = OSAllocatedUnfairLock(initialState: false)
             let task = Task {
-                Self.streamsLock.withLock { Self._activeStreams += 1 }
-                defer { Self.streamsLock.withLock { Self._activeStreams -= 1 } }
+                defer { Self.releaseStream(once) } // punkty terminalne do/catch
                 guard let container = Self.lock.withLock({ Self._container }) else {
                     continuation.finish(throwing: NSError(domain: "mlx", code: 2, userInfo: [NSLocalizedDescriptionKey: "model nie załadowany"])); return
                 }
@@ -80,7 +101,7 @@ final class MLXEngine: InferenceEngine, @unchecked Sendable {
                     continuation.finish()
                 } catch { continuation.finish(throwing: error) }
             }
-            continuation.onTermination = { _ in task.cancel() }
+            continuation.onTermination = { _ in task.cancel(); Self.releaseStream(once) }
         }
     }
 }

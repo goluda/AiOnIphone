@@ -49,7 +49,7 @@ struct MLXLoading: ModelLoading {
         case .invalidRequest(let m): return .invalidRequest(m)
         case .downloadInProgress: return .downloadInProgress
         case .notReady: return .notReady
-        case .notFound: return .notFound
+        case .notFound: return op == .delete ? .notFound : .invalidRequest("model nie znaleziony") // I-3 spec §5: delete→404; load/unload→400
         case .memoryPressure: return .memoryPressure
         case .downloadFailed(let m): return .failed(m)
         case .http(let c): return .failed("http \(c)")
@@ -83,8 +83,8 @@ struct MLXLoading: ModelLoading {
             extraModels: { [] })
     }
     func refresh() async { records = await store.records(); status = await coordinator.currentStatus() }
-    func importRepo() {
-        let repo = repoInput.trimmingCharacters(in: .whitespacesAndNewlines)
+    func importRepo(repo: String? = nil) { // I-4: retry z karty failed podaje repo rekordu; fallback = repoInput
+        let repo = (repo ?? repoInput).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !repo.isEmpty else { return }
         Task {
             do { try await coordinator.start(repo: repo, revision: "main") }

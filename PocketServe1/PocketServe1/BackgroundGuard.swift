@@ -22,7 +22,8 @@ final class BackgroundGuard {
     func handle(_ phase: ScenePhase, serverRunning: Bool) {
         switch phase {
         case .background:
-            guard serverRunning && AFMEngine.hasActiveStream else { return } // tylko aktywny stream = grant
+            // I-2: stream AFM LUB MLX — oba silniki trzymają licznik; grant tylko w oknie generowania.
+            guard serverRunning && (AFMEngine.hasActiveStream || MLXEngine.shared.activeStreams > 0) else { return }
             begin()
         case .active, .inactive:
             end() // foreground = grant zbędny

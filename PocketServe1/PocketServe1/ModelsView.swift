@@ -32,7 +32,7 @@ struct ModelsView: View {
                         HStack {
                             if rec.loaded { Button("Odładuj") { vm.unload(rec.id) } }
                             else if rec.state == .ready { Button("Wczytaj") { vm.load(rec.id) } }
-                            if rec.state == .failed { Button("Ponów import") { vm.importRepo() } }
+                            if rec.state == .failed { Button("Ponów import") { vm.importRepo(repo: rec.repo) } }
                             Spacer()
                             Button("Usuń pliki", role: .destructive) { vm.deleteFiles(rec.id) }.disabled(rec.loaded)
                         }
