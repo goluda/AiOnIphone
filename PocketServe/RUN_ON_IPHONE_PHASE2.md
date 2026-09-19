@@ -46,3 +46,25 @@ Oczekiwane: `** BUILD SUCCEEDED **` (pierwszy build ściąga binary xcframework 
   (`ModelConfiguration(directory:)` — zero pobierania z HF; folder dostarcza ModelKit/DownloadCoordinator).
 - `contextWindow` = 8192 (stała — 2.29.1 nie ekspozuje `modelContextLength`; potwierdzić realne okno na urządzeniu).
 - Generowanie na silniku: `mlx-swift` Metal — pierwszy token wolny (prefill), potem strumień SSE jak AFM.
+
+## 4. Smoke UI + /x/* (Task 7 — po wbudowaniu wersji z Task 6)
+Na iPhonie: Start serwera → **Modele** (NavigationLink) → kolejno:
+1. **Import**: `mlx-community/Qwen3-1.7B-4bit` (mały model na start) → pasek postępu
+   (`downloading x/y GB`) → `verifying` → rekord z badge stanu `ready` na liście.
+   Potwierdź w terminalu: `curl http://<IP>:8080/x/download/status` → pola snake_case: `state`,`bytes_done`,`bytes_total`.
+2. **Wczytaj** → badge **ZAŁADOWANY**. `curl http://<IP>:8080/v1/models` → na liście pojawił się
+   `mlx:mlx-community/Qwen3-1.7B-4bit` z `context_window: 8192` (potwierdź realne okno → Task 7 finding).
+3. **Chat MLX**:
+   `curl -N http://<IP>:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"mlx:mlx-community/Qwen3-1.7B-4bit","messages":[{"role":"user","content":"Napisz wiersz o Wiśle"}],"stream":true}'`
+   → tokeny SSE → `data: [DONE]`. Bez strumienia (`stream:false`) → JSON `message.content` + `usage`.
+4. **409 przed załadowaniem** (przed krokiem 2 albo po kroku 5): model `mlx:coh/any` →
+   `HTTP 409` z `"type":"model_not_ready"` (NIE 404 — prefiks `mlx:` jest czyj).
+   Obok: `apple-afm` działa dalej; zły id bez prefiksu → 404 jak w Fazie 1.
+5. **Odładuj** → badge znika, `mlx:...` znika z `/v1/models`, chat na nim → 409.
+6. **Single-flight**: dwa równoległe chat (jeden mlx) → drugi dostaje `429 server_busy`.
+7. **Memory pressure**: załaduj duży model → obróć/obciąż urządzenie (lub Xcode Debug → Simulate Memory
+   Warning na symulatorze) → banner „Niska pamięć…" + auto-unload (badge znika).
+8. **Usuń pliki**: przycisk nieaktywny gdy ZAŁADOWANY; po odładowaniu → rekord znika,
+   `curl -X DELETE http://<IP>:8080/x/models/mlx%3A<repo>` → `{"deleted":true}`.
+Uwaga: otwarcie **Modele** przy działającym serwerze = chwilny restart nasłuchu na tym samym porcie
+(attach wymienia rejestr silników) — żądania w tym oknie ~ms mogą wypaść; odpytaj ponownie.
