@@ -11,6 +11,12 @@ final class RequestParserTests: XCTestCase {
     func testIncompleteReturnsNil() {
         XCTAssertNil(RequestParser.parse(Data("POST /v1/chat HTTP/1.1\r\nContent-Length: 5\r\n\r".utf8)))
     }
+    func testNilUntilBodyComplete() {
+        var data = Data("POST /v1/chat HTTP/1.1\r\nContent-Length: 4\r\n\r\nab".utf8)
+        XCTAssertNil(RequestParser.parse(data)) // headers present, body short -> nil
+        data.append(contentsOf: "cd".utf8)
+        XCTAssertEqual(RequestParser.parse(data)?.body, Data("abcd".utf8))
+    }
     func testWaitsForFullBody() {
         var r: HTTPRequest?
         var data = Data()
