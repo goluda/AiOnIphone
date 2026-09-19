@@ -9,7 +9,7 @@ struct ContentView: View {
                 .foregroundStyle(model.running ? .green : .secondary)
             Button(model.running ? "Stop" : "Start") { model.running ? model.stop() : model.start() }
                 .buttonStyle(.borderedProminent)
-            if model.running { Text("\(UIDevice.current.name).local:8080").font(.system(.body, design: .monospaced)) }
+            if model.running { Text("\(model.address):\(model.port, format: .number.grouping(.never))").font(.system(.body, design: .monospaced)).textSelection(.enabled) }
         }.padding()
         // Step 7 (brief): background-task guard — w tle utrzymuje zadanie do expiry, bez restartu żądań.
         .onChange(of: scenePhase) { _, phase in

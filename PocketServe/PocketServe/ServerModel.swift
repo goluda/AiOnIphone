@@ -1,16 +1,17 @@
-import Combine
 import Foundation
 import OpenAICompat
 import SwiftUI
+import Combine
 
 @MainActor final class ServerModel: NSObject, ObservableObject { // NSObject: wymóg NetServiceDelegate (NSObjectProtocol)
     @Published var running = false
     @Published var port: UInt16 = 8080
+    @Published var address = "—"
     private let server = HTTPServer(engines: [AFMEngine()])
     private var netService: NetService?
 
     func start() {
-        _ = Task { do { port = try await server.start(port: 8080); running = true; publishBonjour() } } // brief: błąd ignorowany jawnie
+        _ = Task { do { port = try await server.start(port: 8080); address = Self.localIPAddress() ?? "brak LAN"; running = true; publishBonjour() } } // brief: błąd ignorowany jawnie
     }
     func stop() { netService?.stop(); Task { await server.stop() }; running = false }
     private func publishBonjour() {
@@ -19,6 +20,21 @@ import SwiftUI
         svc.delegate = self
         netService = svc
         svc.publish()
+    }
+
+    static func localIPAddress() -> String? {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
+        defer { freeifaddrs(ifaddr) }
+        for ptr in sequence(first: first, next: { $0.ifa_next }) {
+            guard let sa = ptr.pointee.ifa_addr?.pointee,
+                  sa.sa_family == UInt8(AF_INET),
+                  String(cString: ptr.pointee.ifa_name) == "en0" else { continue }
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            guard getnameinfo(ptr.pointee.ifa_addr, socklen_t(sa.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
+            return String(cString: host)
+        }
+        return nil
     }
 }
 
