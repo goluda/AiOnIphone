@@ -9,14 +9,13 @@ final class HFDownloaderTests: XCTestCase {
         super.setUp()
         root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: root.appendingPathComponent("models"), withIntermediateDirectories: true)
-        URLProtocol.registerClass(FakeHF.self)
         let cfg = Data(#"{"model_type":"mlx"}"#.utf8)
         FakeHF.files = ["/api/models/\(repo)/revision/rev": Data(#"""
         {"siblings":[{"rfilename":"config.json","size":\#(cfg.count)},{"rfilename":"model.safetensors","size":1000}]}
         """#.utf8),
                         "/\(repo)/resolve/rev/config.json": cfg,
                         "/\(repo)/resolve/rev/model.safetensors": Data(repeating: 0xAB, count: 1000)]
-        FakeHF.ignoreRange = false; FakeHF.failOncePath = nil
+        FakeHF.ignoreRange = false; FakeHF.failOncePath = nil; FakeHF.lastRangeHeader = nil
         var config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [FakeHF.self]
         let session = URLSession(configuration: config)
@@ -24,26 +23,35 @@ final class HFDownloaderTests: XCTestCase {
         downloader = HFDownloader(store: store, client: HFClient(session: session, base: URL(string: "https://fake.hf")!), session: session, root: root)
     }
 
+    override func tearDown() {
+        URLProtocol.unregisterClass(FakeHF.self)
+        super.tearDown()
+    }
+
     func testHappyPathReadyWithRecord() async throws {
         try await downloader.start(repo: repo, revision: "rev")
         let st = await downloader.currentStatus()
         XCTAssertEqual(st.state, .ready)
-        XCTAssertEqual(st.bytesTotal, Int64(1000 + #"{"model_type":"mlx"}"#.utf8.count))
+        XCTAssertEqual(st.bytesTotal, Int64(1020)) // model 1000 + config.json 20
         let rs = await store.records()
         XCTAssertEqual(rs.first?.bytesOnDisk, 1000) // tylko safetensors liczy się do rozmiaru
         XCTAssertEqual(rs.first?.state, .ready)
     }
 
     func testResumeAfterFailureUsesPartFile() async throws {
+        let dir = root.appendingPathComponent("models").appendingPathComponent("mlx-community_test-qwen-mlx")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(repeating: 0xAB, count: 400).write(to: dir.appendingPathComponent("model.safetensors.part"))
         FakeHF.failOncePath = "/\(repo)/resolve/rev/model.safetensors"
         do { try await downloader.start(repo: repo, revision: "rev") } catch {}
-        // częściowy .part może nie istnieć (błąd przed bajtami) — retry musi dokończyć:
+        // retry musi dokończyć z .part przez Range (SDK 27: URLProtocol nie dostarcza częściowych bajtów przy fail):
         FakeHF.failOncePath = nil
         try await downloader.start(repo: repo, revision: "rev")
         let st = await downloader.currentStatus()
         XCTAssertEqual(st.state, .ready)
+        XCTAssertEqual(FakeHF.lastRangeHeader, "bytes=400-")
         let finalFile = root.appendingPathComponent("models").appendingPathComponent("mlx-community_test-qwen-mlx").appendingPathComponent("model.safetensors")
-        XCTAssertEqual(try Data(contentsOf: finalFile).count, 1000)
+        XCTAssertEqual(try Data(contentsOf: finalFile), Data(repeating: 0xAB, count: 1000))
     }
 
     func testNonMLXRejected() async throws {
