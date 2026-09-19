@@ -3,7 +3,16 @@ import Foundation
 public protocol InferenceEngine: Sendable {
     var id: String { get }
     var contextWindow: Int { get }
+    // Silnik dynamicznego id (faza 2, mlx): przejmuje prefiks modeli; niezarejestrowany exact-id
+    // z tym prefiksem → 409 model_not_ready zamiast 404. Domyślnie: silnik statyczny.
+    var prefixOwned: String? { get }
+    var listedModel: ModelInfo? { get }
     func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error>
+}
+
+public extension InferenceEngine {
+    var prefixOwned: String? { nil }
+    var listedModel: ModelInfo? { ModelInfo(id: id, created: 0, contextWindow: contextWindow) }
 }
 
 public actor MockEngine: InferenceEngine {

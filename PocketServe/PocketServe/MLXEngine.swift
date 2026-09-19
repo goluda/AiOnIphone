@@ -33,6 +33,11 @@ final class MLXEngine: InferenceEngine, @unchecked Sendable {
     nonisolated var id: String { Self.loadedId ?? "mlx:none" }
     // 2.29.1 nie ekspozuje okna kontekstu modelu — 8192 jako konserwatywne przybliżenie (Task 7: potwierdzić).
     nonisolated var contextWindow: Int { 8192 }
+    // Serwer: "mlx:*" to nasz prefiks → niezaładowany = 409 model_not_ready; na liście tylko gdy załadowany.
+    nonisolated var prefixOwned: String? { "mlx:" }
+    nonisolated var listedModel: ModelInfo? {
+        Self.loadedId.map { ModelInfo(id: $0, created: 0, contextWindow: contextWindow) }
+    }
 
     nonisolated func loadRecord(_ repo: String, revision: String, folder: URL) async throws {
         await unloadNow()

@@ -2,14 +2,14 @@ import Foundation
 import Network
 
 public actor HTTPServer {
-    private let engines: [String: any InferenceEngine]
+    private let engines: [any InferenceEngine]
     private let ext: ServerExtension?
     private var listener: NWListener?
     private var busy = false
     public private(set) var port: UInt16?
 
     public init(engines: [any InferenceEngine], extension ext: ServerExtension? = nil) {
-        self.engines = Dictionary(uniqueKeysWithValues: engines.map { ($0.id, $0) })
+        self.engines = engines
         self.ext = ext
     }
 
@@ -73,9 +73,8 @@ public actor HTTPServer {
             sendError(conn, 400, "invalid_request_error"); return
         }
         if req.method == "GET", req.path == "/v1/models" {
-            var list = engines.values
+            var list = engines.compactMap { $0.listedModel }
                 .sorted { $0.id < $1.id }
-                .map { ModelInfo(id: $0.id, created: 0, contextWindow: $0.contextWindow) }
             if let ext { list += ext.extraModels() }
             sendJSON(conn, 200, try! JSONEncoder().encode(ModelsList(data: list))); return
         }
@@ -124,8 +123,14 @@ public actor HTTPServer {
         let request: ChatCompletionRequest
         do { request = try JSONDecoder().decode(ChatCompletionRequest.self, from: req.body) }
         catch { sendError(conn, 400, "invalid_request_error"); return }
-        guard let engine = engines[request.model] else {
-            sendError(conn, 404, "model_not_found"); return
+        guard let engine = engines.first(where: { $0.id == request.model }) else {
+            // dynamic-id silnik (mlx): prefiks czyj, ale model nie załadowany → 409 (spec §6), nie 404
+            if engines.contains(where: { ($0.prefixOwned.map { request.model.hasPrefix($0) }) ?? false }) {
+                sendError(conn, 409, "model_not_ready")
+            } else {
+                sendError(conn, 404, "model_not_found")
+            }
+            return
         }
         busy = true
         defer { busy = false }
