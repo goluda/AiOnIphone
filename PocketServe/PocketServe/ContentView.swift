@@ -5,7 +5,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("PocketServe").font(.largeTitle)
-            Text(model.running ? "● online :\(model.port)" : "○ offline")
+            Text(model.running ? "● online :\(model.port, format: .number.grouping(.never))" : "○ offline")
                 .foregroundStyle(model.running ? .green : .secondary)
             Button(model.running ? "Stop" : "Start") { model.running ? model.stop() : model.start() }
                 .buttonStyle(.borderedProminent)
