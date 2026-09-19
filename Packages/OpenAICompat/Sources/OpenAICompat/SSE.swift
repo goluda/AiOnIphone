@@ -10,14 +10,15 @@ public enum SSEEncoder {
 }
 
 public struct SSEParser {
-    private var buffer = ""
+    private var buffer = Data()
     public init() {}
     public mutating func feed(_ data: Data) -> [String] {
-        buffer += String(decoding: data, as: UTF8.self)
+        buffer.append(data)
         var events: [String] = []
-        while let range = buffer.range(of: "\n\n") {
-            let event = String(buffer[..<range.lowerBound])
+        while let range = buffer.range(of: Data([0x0A, 0x0A])) {
+            let eventData = buffer[buffer.startIndex..<range.lowerBound]
             buffer.removeSubrange(..<range.upperBound)
+            guard let event = String(data: eventData, encoding: .utf8) else { continue }
             for line in event.components(separatedBy: "\n") where line.hasPrefix("data: ") {
                 let payload = String(line.dropFirst(6))
                 if payload != "[DONE]" { events.append(payload) }

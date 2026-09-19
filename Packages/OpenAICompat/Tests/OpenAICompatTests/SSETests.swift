@@ -20,4 +20,11 @@ final class SSETests: XCTestCase {
         var p = SSEParser()
         XCTAssertEqual(p.feed(Data(": keep-alive\n\n".utf8)), [])
     }
+    func testParserSurvivesMultiByteSplit() {
+        var p = SSEParser()
+        let payload = "data: żółw\n\n"
+        var out: [String] = []
+        for b in payload.utf8 { out += p.feed(Data([b])) }
+        XCTAssertEqual(out, ["żółw"])
+    }
 }
