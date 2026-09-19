@@ -1,11 +1,11 @@
 import Foundation
 
 public enum ServerAPIError: Error {
-    case invalidRequest(String), downloadInProgress, notReady, notLoaded, notFound, memoryPressure, failed(String)
+    case invalidRequest(String), downloadInProgress, notReady, notLoaded, notFound, modelLoaded, memoryPressure, failed(String)
     public var httpStatus: Int {
         switch self {
         case .invalidRequest: return 400
-        case .downloadInProgress, .notReady, .notLoaded, .memoryPressure: return 409
+        case .downloadInProgress, .notReady, .notLoaded, .modelLoaded, .memoryPressure: return 409
         case .notFound: return 404
         case .failed: return 502
         }
@@ -14,9 +14,10 @@ public enum ServerAPIError: Error {
         switch self {
         case .invalidRequest: return "invalid_request_error"
         case .downloadInProgress: return "download_in_progress"
-        case .notReady: return "model_not_ready"
+        case .notReady: return "download_not_ready" // spec §5 /x/models/load; chat-side model_not_ready żyje w apce (Task 5/6)
         case .notLoaded: return "model_not_loaded"
         case .notFound: return "not_found"
+        case .modelLoaded: return "model_loaded"
         case .memoryPressure: return "memory_pressure"
         case .failed: return "download_failed"
         }

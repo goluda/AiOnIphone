@@ -93,7 +93,7 @@ public actor HTTPServer {
                     struct DReq: Decodable { let repo: String; let revision: String? }
                     let d: DReq
                     do { d = try JSONDecoder().decode(DReq.self, from: req.body) }
-                    catch { throw ServerAPIError.invalidRequest("repo wymagane") }
+                    catch { throw ServerAPIError.invalidRequest("repo: \(error.localizedDescription)") }
                     try await dl.start(d.repo, d.revision)
                     sendRaw(conn, 202, Data(#"{"accepted":true}"#.utf8), type: "application/json")
                 case ("POST", "/x/models/load"):
@@ -164,8 +164,7 @@ public actor HTTPServer {
     }
 
     private func sendJSON(_ conn: NWConnection, _ status: Int, _ body: Data) {
-        let h = "HTTP/1.1 \(status) \r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
-        conn.send(content: Data(h.utf8) + body, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
+        sendRaw(conn, status, body, type: "application/json")
     }
 
     private func sendRaw(_ conn: NWConnection, _ status: Int, _ body: Data, type: String) {
