@@ -26,7 +26,7 @@ import Combine
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
         defer { freeifaddrs(ifaddr) }
-        for ptr in sequence(first: first, next: { $0.ifa_next }) {
+        for ptr in sequence(first: first, next: { $0.pointee.ifa_next }) {
             guard let sa = ptr.pointee.ifa_addr?.pointee,
                   sa.sa_family == UInt8(AF_INET),
                   String(cString: ptr.pointee.ifa_name) == "en0" else { continue }
