@@ -4,7 +4,7 @@ Data: 2026-09-19 · Status: zatwierdzona · Poprzedza: Faza 3 (Companion macOS) 
 
 ## 1. Cel
 
-Drugi silnik推理 `mlx:<repo>` obok `apple-afm`: pobieranie open-weight modeli
+Drugi silnik inferencji `mlx:<repo>` obok `apple-afm`: pobieranie open-weight modeli
 w formacie MLX z Hugging Face prosto na iPhone (12 GB unified), zarządzanie nimi z
 UI iOS (lista / import po ID / unload / usuwanie plików), inference przez ten sam
 OpenAI-kompatybilny endpoint z Fazy 1. Model dev-testowy:
