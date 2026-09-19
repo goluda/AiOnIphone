@@ -135,7 +135,7 @@ git commit -m "feat(spm): scaffold OpenAICompat package with ChatMessage DTO"
 
 **Interfaces:**
 - Consumes: `ChatMessage` (Task 1).
-- Produces: `ChatCompletionRequest(model, messages, stream, temperature, maxTokens)`; `ChatCompletionChunk(id, created, model, choices:[ChunkChoice(delta, finishReason)])`; `Delta(content: String?)`; `CompletionResponse(...usage)`; `OpenAIErrorBody(message, type)`; `Usage(promptTokens, completionTokens)`; `PromptBuilder.prompt(from:) -> String`; `ModelInfo(id, contextWindow)`; `ModelsList(data:[ModelInfo])`; `GenerationParams(temperature, maxTokens)`.
+- Produces: `ChatCompletionRequest(model, messages, stream, temperature, maxTokens)`; `ChatCompletionChunk(id, created, model, choices:[ChunkChoice(delta, finishReason)])`; `Delta(content: String?)`; `ResponseChoice(index, message: ChatMessage, finishReason)`; `CompletionResponse(choices:[ResponseChoice], usage)`; `OpenAIErrorBody(message, type)`; `Usage(promptTokens, completionTokens)`; `PromptBuilder.prompt(from:) -> String`; `ModelInfo(id, contextWindow)`; `ModelsList(data:[ModelInfo])`; `GenerationParams(temperature, maxTokens)`.
 
 - [ ] **Step 1: Dopisz failing testy do `ModelsTests.swift`**
 
@@ -212,14 +212,22 @@ public struct Usage: Codable, Sendable { public let promptTokens: Int
     public init(promptTokens: Int, completionTokens: Int) {
         self.promptTokens = promptTokens; self.completionTokens = completionTokens } }
 
+public struct ResponseChoice: Codable, Sendable { public let index: Int
+    public let message: ChatMessage
+    public let finishReason: String?
+    public init(index: Int, message: ChatMessage, finishReason: String?) {
+        self.index = index; self.message = message; self.finishReason = finishReason }
+    enum CodingKeys: String, CodingKey { case index, message
+        case finishReason = "finish_reason" } }
+
 public struct CompletionResponse: Codable, Sendable {
     public let id: String
     public let object: String
     public let created: Int
     public let model: String
-    public let choices: [ChunkChoice]
+    public let choices: [ResponseChoice]
     public let usage: Usage
-    public init(id: String, created: Int, model: String, choices: [ChunkChoice], usage: Usage) {
+    public init(id: String, created: Int, model: String, choices: [ResponseChoice], usage: Usage) {
         self.id = id; self.object = "chat.completion"; self.created = created
         self.model = model; self.choices = choices; self.usage = usage } }
 
@@ -539,7 +547,7 @@ final class HTTPServerTests: XCTestCase {
         req.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "mock", messages: [ChatMessage(role: "user", content: "siema")]))
         let (data, _) = try await URLSession.shared.data(for: req)
         let r = try JSONDecoder().decode(CompletionResponse.self, from: data)
-        XCTAssertEqual(r.choices.first?.delta.content, "To jest mock")
+        XCTAssertEqual(r.choices.first?.message.content, "To jest mock")
     }
     func testChatStreamSSEDone() async throws {
         let s = makeServer(); let port = try await s.start(port: 0); defer { Task { await s.stop() } }
@@ -667,7 +675,7 @@ public actor HTTPServer {
             let usage = Usage(promptTokens: TokenCounter.approximate(prompt),
                               completionTokens: TokenCounter.approximate(full))
             let resp = CompletionResponse(id: id, created: created, model: request.model,
-                choices: [.init(index: 0, delta: .init(content: full), finishReason: "stop")], usage: usage)
+                choices: [.init(index: 0, message: ChatMessage(role: "assistant", content: full), finishReason: "stop")], usage: usage)
             sendJSON(conn, 200, try! JSONEncoder().encode(resp))
         }
     }
