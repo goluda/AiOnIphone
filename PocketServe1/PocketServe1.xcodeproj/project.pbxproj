@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		48F0D6DA305EF8B000116CAC /* OpenAICompat in Frameworks */ = {isa = PBXBuildFile; productRef = 48F0D6D9305EF8B000116CAC /* OpenAICompat */; };
+		48F0D6E3305EFB0000116CAC /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 48F0D6E2305EFB0000116CAC /* MLXLLM */; };
+		48F0D6E5305EFB0000116CAC /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 48F0D6E4305EFB0000116CAC /* MLXLMCommon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +71,8 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				48F0D6DA305EF8B000116CAC /* OpenAICompat in Frameworks */,
+				48F0D6E3305EFB0000116CAC /* MLXLLM in Frameworks */,
+				48F0D6E5305EFB0000116CAC /* MLXLMCommon in Frameworks */,
 			);
 		};
 		48F0D692305EF65700116CAC /* Frameworks */ = {
@@ -131,6 +135,7 @@
 			name = PocketServe1;
 			packageProductDependencies = (
 				48F0D6D9305EF8B000116CAC /* OpenAICompat */,
+				48F0D6E2305EFB0000116CAC /* MLXLLM */,
 			);
 			productName = PocketServe1;
 			productReference = 48F0D67F305EF65600116CAC /* PocketServe1.app */;
@@ -212,6 +217,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				48F0D6BB305EF77300116CAC /* XCLocalSwiftPackageReference "../Packages/OpenAICompat" */,
+				48F0D6E1305EFB0000116CAC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 48F0D680305EF65600116CAC /* Products */;
@@ -590,11 +596,32 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		48F0D6E1305EFB0000116CAC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.29.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		48F0D6D9305EF8B000116CAC /* OpenAICompat */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 48F0D6BB305EF77300116CAC /* XCLocalSwiftPackageReference "../Packages/OpenAICompat" */;
 			productName = OpenAICompat;
+		};
+		48F0D6E2305EFB0000116CAC /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 48F0D6E1305EFB0000116CAC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
+		};
+		48F0D6E4305EFB0000116CAC /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 48F0D6E1305EFB0000116CAC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
