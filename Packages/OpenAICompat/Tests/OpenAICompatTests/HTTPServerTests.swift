@@ -1,5 +1,6 @@
 import XCTest
 import Network
+import os
 @testable import OpenAICompat
 
 final class HTTPServerTests: XCTestCase {
@@ -155,6 +156,40 @@ final class HTTPServerTests: XCTestCase {
         }
         XCTFail("server did not recover after mid-stream disconnect")
     }
+    func testUnloadedPlaceholderNotRoutableGives409() async throws {
+        let mlx = PlaceholderMLXEngine()
+        let s = HTTPServer(engines: [MockEngine(id: "apple-afm"), mlx])
+        let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
+        req.httpMethod = "POST"; req.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "mlx:none", messages: []))
+        let (d1, r1) = try await URLSession.shared.data(for: req) // exact-match na placeholderze → 409, nie 200/429
+        XCTAssertEqual((r1 as? HTTPURLResponse)?.statusCode, 409)
+        XCTAssertTrue(String(data: d1, encoding: .utf8)!.contains("model_not_ready"))
+        req.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "mlx:foo", messages: []))
+        let (_, r2) = try await URLSession.shared.data(for: req)
+        XCTAssertEqual((r2 as? HTTPURLResponse)?.statusCode, 409)
+        let (md, mr) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/v1/models")!)
+        XCTAssertEqual((mr as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertFalse(String(data: md, encoding: .utf8)!.contains("mlx:none"))
+        var reqA = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
+        reqA.httpMethod = "POST"; reqA.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "apple-afm", messages: [ChatMessage(role: "user", content: "x")]))
+        let (da, ra) = try await URLSession.shared.data(for: reqA)
+        XCTAssertEqual((ra as? HTTPURLResponse)?.statusCode, 200) // statyczny silnik routuje sie normalnie
+        XCTAssertEqual(try JSONDecoder().decode(CompletionResponse.self, from: da).choices.first?.message.content, "To jest mock")
+    }
+    func testLoadedDynamicEngineRoutesAndListed() async throws {
+        let mlx = PlaceholderMLXEngine(); mlx.setLoaded(true)
+        let s = HTTPServer(engines: [MockEngine(id: "apple-afm"), mlx])
+        let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
+        req.httpMethod = "POST"; req.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "mlx:x", messages: [ChatMessage(role: "user", content: "x")]))
+        let (d, r) = try await URLSession.shared.data(for: req)
+        XCTAssertEqual((r as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(try JSONDecoder().decode(CompletionResponse.self, from: d).choices.first?.message.content, "mlx-ok")
+        let (md, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/v1/models")!)
+        let ids = try JSONDecoder().decode(ModelsList.self, from: md).data.map(\.id)
+        XCTAssertEqual(ids, ["apple-afm", "mlx:x"])
+    }
 }
 
 private func deltaText(_ payloads: [String]) throws -> String {
@@ -183,6 +218,18 @@ actor SpyEngine: InferenceEngine {
         }
     }
     private func record(prompt: String, params: GenerationParams) { lastPrompt = prompt; lastParams = params }
+}
+
+final class PlaceholderMLXEngine: InferenceEngine, @unchecked Sendable { // silnik dynamicznego id, niezaładowany = placeholder "mlx:none"
+    private let loaded = OSAllocatedUnfairLock(initialState: false)
+    nonisolated var id: String { loaded.withLock { $0 ? "mlx:x" : "mlx:none" } }
+    nonisolated var contextWindow: Int { 8192 }
+    nonisolated var prefixOwned: String? { "mlx:" }
+    nonisolated var listedModel: ModelInfo? { loaded.withLock { $0 ? ModelInfo(id: "mlx:x", created: 0, contextWindow: 8192) : nil } }
+    func setLoaded(_ v: Bool) { loaded.withLock { $0 = v } }
+    nonisolated func stream(prompt: String, params: GenerationParams) -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { $0.yield("mlx-ok"); $0.finish() }
+    }
 }
 
 

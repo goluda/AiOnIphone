@@ -123,7 +123,8 @@ public actor HTTPServer {
         let request: ChatCompletionRequest
         do { request = try JSONDecoder().decode(ChatCompletionRequest.self, from: req.body) }
         catch { sendError(conn, 400, "invalid_request_error"); return }
-        guard let engine = engines.first(where: { $0.id == request.model }) else {
+        // exact-match pomija placeholdery silników dynamicznych (np. "mlx:none" gdy niezaładowany)
+        guard let engine = engines.first(where: { $0.id == request.model && ($0.listedModel != nil || $0.prefixOwned == nil) }) else {
             // dynamic-id silnik (mlx): prefiks czyj, ale model nie załadowany → 409 (spec §6), nie 404
             if engines.contains(where: { ($0.prefixOwned.map { request.model.hasPrefix($0) }) ?? false }) {
                 sendError(conn, 409, "model_not_ready")
