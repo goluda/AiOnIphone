@@ -62,6 +62,10 @@ Na iPhonie: Start serwera → **Modele** (NavigationLink) → kolejno:
    → eventy `message_start`/`content_block_start`/`ping`/`content_block_delta`…/`content_block_stop`/`message_delta`/`message_stop`; **brak** `[DONE]`.
    Bez strumienia (`stream:false`) → JSON `"type":"message"`, `content[0].text`, `stop_reason:"end_turn"`, `usage.input_tokens/output_tokens`.
    Zły id z prefiksem `mlx:` → 409 `model_not_ready` w envelope `{"type":"error",...}`.
+3b. **Czat w aplikacji** (test bez Maca): ekran główny → **Czat** → picker modelu (domyślnie `apple-afm`) → wyślij wiadomość →
+   tokeny pojawiają się strumieniowo w dymce z kursorem „▌"; **Stop** w trakcie przerywa strumień bez wywrotki.
+   Przy wyłączonym serwerze → placeholder „Serwer wyłączony" + przycisk start. **API** (ekran główny) → lista endpointów,
+   base URL do skopiowania; przy załadowanym mlx → czat na mlx działa tak samo jak curl z kroku 3.
 5. **409 przed załadowaniem** (przed krokiem 2 albo po kroku 6): model `mlx:coh/any` →
    `HTTP 409` z `"type":"model_not_ready"` (NIE 404 — prefiks `mlx:` jest czyj).
    Obok: `apple-afm` działa dalej; zły id bez prefiksu → 404 jak w Fazie 1.
