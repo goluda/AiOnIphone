@@ -6,13 +6,13 @@ struct ModelsView: View {
     var body: some View {
         List {
             if vm.memoryWarning {
-                Text("Niska pamięć — model odładowany automatycznie")
+                Text("Low memory — model unloaded automatically")
                     .font(.caption).foregroundStyle(.white)
                     .padding(8).frame(maxWidth: .infinity, alignment: .leading)
                     .background(.red, in: RoundedRectangle(cornerRadius: 8))
             }
-            Section("Import z Hugging Face") {
-                TextField("np. mlx-community/Qwen3-1.7B-4bit", text: $vm.repoInput)
+            Section("Hugging Face import") {
+                TextField("e.g. mlx-community/Qwen3-1.7B-4bit", text: $vm.repoInput)
                     .textInputAutocapitalization(.never).font(.system(.body, design: .monospaced))
                 HStack {
                     Button("Import") { vm.importRepo() }
@@ -27,37 +27,97 @@ struct ModelsView: View {
                     Text("\(vm.status.state.rawValue) \(format(vm.status.bytesDone))/\(format(vm.status.bytesTotal))").font(.caption)
                 }
             }
-            Section("Modele") {
-                if vm.records.isEmpty { Text("Brak pobranych modeli").foregroundStyle(.secondary) }
+            Section("Models") {
+                if vm.records.isEmpty { Text("No models downloaded yet").foregroundStyle(.secondary) }
                 ForEach(vm.records, id: \.id) { rec in
-                    VStack(alignment: .leading) {
-                        HStack { Text(rec.repo).font(.headline)
-                            if rec.loaded { Text("ZAŁADOWANY").font(.caption2).foregroundStyle(.white).padding(4).background(.green, in: Capsule()) }
-                            Spacer() }
-                        Text("\(rec.quant ?? "?") · \(format(rec.bytesOnDisk)) · \(rec.state.rawValue)").font(.caption).foregroundStyle(.secondary)
-                        HStack {
-                            if rec.loaded { Button("Odładuj") { vm.unload(rec.id) } }
-                            else if rec.state == .ready { Button("Wczytaj") { vm.load(rec.id) } }
-                            if rec.state == .failed { Button("Ponów import") { vm.importRepo(repo: rec.repo) } }
-                            Spacer()
-                            Button("Usuń pliki", role: .destructive) { vm.deleteFiles(rec.id) }.disabled(rec.loaded)
-                        }
-                    }
+                    ModelRow(rec: rec, vm: vm)
                 }
             }
         }
-        .confirmationDialog("Co pobrać?", isPresented: $vm.showPresetPicker, titleVisibility: .visible) {
+        .confirmationDialog("Which model to import?", isPresented: $vm.showPresetPicker, titleVisibility: .visible) {
             ForEach(ModelsViewModel.presets) { p in
-                Button("\(p.name) — \(format(p.approxBytes))") { vm.pickPreset(p) }
+                Button("\(p.name) — \(format(p.approxBytes)) · \(p.note)") { vm.pickPreset(p) }
             }
-            Button("Anuluj", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Przykładowe modele ze sklepu mlx-community. Rozmiary orientacyjne.")
+            Text("Sample models from mlx-community. Sizes approximate.")
         }
-        .navigationTitle("Modele")
-        .navigationSubtitle(vm.records.first(where: { $0.loaded })?.repo ?? "tylko apple-afm") // spec §6: nagłówek = załadowany model albo fallback
+        .navigationTitle("Models")
+        .navigationSubtitle(vm.records.first(where: { $0.loaded })?.repo ?? "apple-afm only") // spec §6: header = loaded model or fallback
         .task { await vm.refresh() }
-        .alert("Błąd", isPresented: .init(get: { vm.alert != nil }, set: { if !$0 { vm.alert = nil } })) { Button("OK") { vm.alert = nil } } message: { Text(vm.alert ?? "") }
+        .alert("Error", isPresented: .init(get: { vm.alert != nil }, set: { if !$0 { vm.alert = nil } })) { Button("OK") { vm.alert = nil } } message: { Text(vm.alert ?? "") }
     }
     private func format(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+}
+
+private struct ModelRow: View {
+    let rec: ModelRecord
+    @ObservedObject var vm: ModelsViewModel
+    @State private var confirmDelete = false
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                Text(rec.repo).font(.headline)
+                if vm.loadingId == rec.id { ProgressView().controlSize(.small) }
+                Spacer()
+                Text(chip).font(.caption2).foregroundStyle(.white)
+                    .padding(4).background(chipColor, in: Capsule())
+            }
+            Text("\(rec.quant ?? "?") · \(fmt(rec.bytesOnDisk))").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                if rec.loaded { Button("Unload") { vm.unload(rec.id) } }
+                else if rec.state == .ready { Button(vm.loadingId == rec.id ? "Loading…" : "Load") { vm.load(rec.id) }.disabled(vm.loadingId != nil) }
+                if rec.state == .failed { Button("Retry import") { vm.importRepo(repo: rec.repo) } }
+                Spacer()
+                Button("Delete", role: .destructive) { confirmDelete = true }
+                    .disabled(vm.deletingId == rec.id || rec.loaded)
+            }
+        }
+        .contentShape(Rectangle())
+        .swipeActions(edge: .leading) {
+            if rec.loaded {
+                Button("Unload") { vm.unload(rec.id) }.tint(.orange)
+            } else if rec.state == .ready {
+                Button(vm.loadingId == rec.id ? "Loading…" : "Load") { vm.load(rec.id) }
+                    .tint(.green).disabled(vm.loadingId != nil)
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Delete", role: .destructive) { confirmDelete = true }
+                .disabled(vm.deletingId == rec.id || rec.loaded)
+        }
+        .confirmationDialog("Delete model files?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete files", role: .destructive) { vm.deleteFiles(rec.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes downloaded files from this device. Re-import from Hugging Face anytime.")
+        }
+    }
+
+    private func fmt(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+
+    private var chip: String {
+        if vm.loadingId == rec.id { return "LOADING…" }
+        if vm.deletingId == rec.id { return "DELETING…" }
+        if rec.loaded { return "LOADED" }
+        switch rec.state {
+        case .ready: return "READY"
+        case .downloading:
+            let pct = Int((Double(vm.status.bytesDone) / Double(max(1, vm.status.bytesTotal)) * 100).rounded())
+            return vm.status.repo == rec.repo ? "DOWNLOADING \(pct)%" : "QUEUED"
+        case .verifying: return "VERIFYING…"
+        case .failed: return "FAILED"
+        case .idle: return "NOT DOWNLOADED"
+        }
+    }
+    private var chipColor: Color {
+        switch chip {
+        case "LOADED": return .green
+        case "FAILED": return .red
+        case "READY": return .gray
+        case "NOT DOWNLOADED": return .gray
+        default: return .blue
+        }
+    }
 }

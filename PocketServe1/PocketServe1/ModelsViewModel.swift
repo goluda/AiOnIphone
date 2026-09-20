@@ -24,10 +24,10 @@ struct ModelPreset: Identifiable {
 @MainActor final class ModelsViewModel: ObservableObject {
     // Presety zweryfikowane live na HF 2026-09-20 (rozmiary = suma .safetensors, ?blobs=true).
     static let presets: [ModelPreset] = [
-        ModelPreset(repo: "mlx-community/Qwen3-0.6B-4bit", name: "Qwen3 0.6B 4bit", approxBytes: 335_000_000, note: "najszybszy start, testowy"),
-        ModelPreset(repo: "mlx-community/Qwen3-1.7B-4bit", name: "Qwen3 1.7B 4bit", approxBytes: 968_000_000, note: "dobry polski, polecany na start"),
-        ModelPreset(repo: "mlx-community/gemma-3n-E2B-it-4bit", name: "Gemma 3n E2B 4bit", approxBytes: 4_463_000_000, note: "mniejszy, jakość wyższa"),
-        ModelPreset(repo: "mlx-community/gemma-3n-E4B-it-4bit", name: "Gemma 3n E4B 4bit", approxBytes: 5_819_000_000, note: "największy — tuż pod limitem 6 GB"),
+        ModelPreset(repo: "mlx-community/Qwen3-0.6B-4bit", name: "Qwen3 0.6B 4bit", approxBytes: 335_000_000, note: "fastest start — test model"),
+        ModelPreset(repo: "mlx-community/Qwen3-1.7B-4bit", name: "Qwen3 1.7B 4bit", approxBytes: 968_000_000, note: "good Polish — recommended first model"),
+        ModelPreset(repo: "mlx-community/gemma-3n-E2B-it-4bit", name: "Gemma 3n E2B 4bit", approxBytes: 4_463_000_000, note: "smaller, higher quality"),
+        ModelPreset(repo: "mlx-community/gemma-3n-E4B-it-4bit", name: "Gemma 3n E4B 4bit", approxBytes: 5_819_000_000, note: "largest — just under the 6 GB limit"),
     ]
     @Published var showPresetPicker = false
     @Published var records: [ModelRecord] = []
@@ -35,6 +35,9 @@ struct ModelPreset: Identifiable {
     @Published var alert: String?
     @Published var repoInput = ""
     @Published var memoryWarning = false
+    // in-process operacje: widoczność LOADING…/DELETING… bez dodatkowego pollingu
+    @Published var loadingId: String?
+    @Published var deletingId: String?
     let store: ModelStore
     let coordinator: DownloadCoordinator
     private var poll: Timer?
@@ -43,7 +46,12 @@ struct ModelPreset: Identifiable {
     init(serverModel: ServerModel) {
         let root = ModelKitPaths.documentsRoot
         store = ModelStore(root: root)
-        let dl = HFDownloader(store: store, client: HFClient(session: .shared), session: .shared, root: root)
+        // R-2: jawne timeouty — zatkany plik nie parkuje koordynatora w .downloading na zawsze
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 60
+        cfg.timeoutIntervalForResource = 3600 // wagi ~5 GB potrzebują miejsca; stall umiera po 60 s bezczynności
+        let session = URLSession(configuration: cfg)
+        let dl = HFDownloader(store: store, client: HFClient(session: session), session: session, root: root)
         coordinator = DownloadCoordinator(downloader: dl, store: store, loader: MLXLoading())
         serverModel.attach(extension: Self.makeExtension(coordinator: coordinator))
         memObs = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
@@ -63,7 +71,7 @@ struct ModelPreset: Identifiable {
     nonisolated static func bridge(_ e: DownloadAPIError, op: Op) -> ServerAPIError {
         switch e {
         case .invalidRequest(let m): return .invalidRequest(m)
-        case .downloadInProgress: return .downloadInProgress
+        case .downloadInProgress, .loadInProgress, .deleteInProgress: return .downloadInProgress // token wire bez zmian (spec §5) — uczciwy tekst per-op tylko w humanize
         case .notReady: return .notReady
         case .notFound: return op == .delete ? .notFound : .invalidRequest("model nie znaleziony") // I-3 spec §5: delete→404; load/unload→400
         case .memoryPressure: return .memoryPressure
@@ -109,20 +117,28 @@ struct ModelPreset: Identifiable {
             await refresh(); pollStatus()
         }
     }
-    func load(_ id: String) { Task { do { try await coordinator.load(id: id) } catch let e as DownloadAPIError { alert = Self.humanize(e) }; await refresh() } }
+    func load(_ id: String) { Task { loadingId = id
+        do { try await coordinator.load(id: id) } catch let e as DownloadAPIError { alert = Self.humanize(e) }
+        loadingId = nil; await refresh() } }
     func unload(_ id: String) { Task { try? await coordinator.unload(id: id); await refresh() } }
-    func deleteFiles(_ id: String) { Task { do { try await coordinator.delete(id: id) } catch let e as DownloadAPIError { alert = Self.humanize(e) } catch { alert = "nie można usunąć — najpierw odładuj model" }; await refresh() } }
+    func deleteFiles(_ id: String) { Task { deletingId = id
+        do { try await coordinator.delete(id: id) }
+        catch let e as DownloadAPIError { alert = Self.humanize(e) }
+        catch { alert = "Delete failed" }
+        deletingId = nil; await refresh() } }
     static func humanize(_ e: DownloadAPIError) -> String {
         switch e {
-        case .invalidRequest: return "to nie jest poprawne repo mlx"
-        case .memoryPressure: return "model za duży — wybierz mniejszą kwantyzację"
-        case .downloadInProgress: return "pobieranie już w toku"
-        case .notReady: return "pobieranie nie ukończone"
-        case .notFound: return "model nie znaleziony"
-        case .notLoaded: return "najpierw odładuj model"
-        case .downloadFailed: return "pobieranie nie powiodło się — ponów import"
-        case .http(let c): return "serwer HF odpowiedział błędem \(c)"
-        case .io: return "błąd dysku"
+        case .invalidRequest: return "Not a valid mlx repo"
+        case .memoryPressure: return "Model too large — pick a smaller quantization"
+        case .downloadInProgress: return "Download already in progress"
+        case .loadInProgress: return "Model is already loading"
+        case .deleteInProgress: return "Cannot delete — another operation in progress"
+        case .notReady: return "Download incomplete — resume it first"
+        case .notFound: return "Model not found locally"
+        case .notLoaded: return "Unload the model first"
+        case .downloadFailed: return "Download failed — retry the import"
+        case .http(let c): return "HF server replied with error \(c)"
+        case .io: return "Disk error"
         }
     }
     private func pollStatus() {
