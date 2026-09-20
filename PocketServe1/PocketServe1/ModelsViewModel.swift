@@ -35,7 +35,7 @@ struct ModelPreset: Identifiable {
     @Published var alert: String?
     @Published var repoInput = ""
     @Published var memoryWarning = false
-    // in-process operacje: widoczność LOADING…/DELETING… bez dodatkowego pollingu
+    // in-process operations: LOADING…/DELETING… visibility without extra polling
     @Published var loadingId: String?
     @Published var deletingId: String?
     let store: ModelStore
@@ -49,7 +49,7 @@ struct ModelPreset: Identifiable {
         // R-2: jawne timeouty — zatkany plik nie parkuje koordynatora w .downloading na zawsze
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 60
-        cfg.timeoutIntervalForResource = 3600 // wagi ~5 GB potrzebują miejsca; stall umiera po 60 s bezczynności
+        cfg.timeoutIntervalForResource = 3600 // ~5 GB weights need room; a stall dies after 60 s of inactivity
         let session = URLSession(configuration: cfg)
         let dl = HFDownloader(store: store, client: HFClient(session: session), session: session, root: root)
         coordinator = DownloadCoordinator(downloader: dl, store: store, loader: MLXLoading())
@@ -66,14 +66,14 @@ struct ModelPreset: Identifiable {
     deinit { if let memObs { NotificationCenter.default.removeObserver(memObs) } }
 
     enum Op { case start, load, unload, delete }
-    // HTTPServer rozumie wyłącznie ServerAPIError — mostek per-op (spec §5):
-    // delete: notLoaded→modelLoaded; unload: notLoaded→model_not_loaded; reszta wspólna.
+    // HTTPServer understands only ServerAPIError — per-op bridge (spec §5):
+    // delete: notLoaded→modelLoaded; unload: notLoaded→model_not_loaded; rest shared.
     nonisolated static func bridge(_ e: DownloadAPIError, op: Op) -> ServerAPIError {
         switch e {
         case .invalidRequest(let m): return .invalidRequest(m)
-        case .downloadInProgress, .loadInProgress, .deleteInProgress: return .downloadInProgress // token wire bez zmian (spec §5) — uczciwy tekst per-op tylko w humanize
+        case .downloadInProgress, .loadInProgress, .deleteInProgress: return .downloadInProgress // wire token unchanged (spec §5) — honest per-op text only in humanize
         case .notReady: return .notReady
-        case .notFound: return op == .delete ? .notFound : .invalidRequest("model nie znaleziony") // I-3 spec §5: delete→404; load/unload→400
+        case .notFound: return op == .delete ? .notFound : .invalidRequest("model not found") // I-3 spec §5: delete→404; load/unload→400
         case .memoryPressure: return .memoryPressure
         case .downloadFailed(let m): return .failed(m)
         case .http(let c): return .failed("http \(c)")

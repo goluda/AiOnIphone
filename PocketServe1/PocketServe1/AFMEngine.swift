@@ -41,8 +41,8 @@ final class AFMEngine: InferenceEngine, @unchecked Sendable {
                 defer { AFMEngine.releaseStream(once) } // punkty terminalne do/catch
                 do {
                     guard SystemLanguageModel.default.availability == .available else {
-                        Self.log.error("AFM unavailable — Apple Intelligence wyłączony")
-                        throw NSError(domain: "afm", code: 1, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence wyłączony"])
+                        Self.log.error("AFM unavailable — Apple Intelligence is turned off")
+                        throw NSError(domain: "afm", code: 1, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence is turned off"])
                     }
                     if #available(iOS 27.0, *) {
                         let caps = SystemLanguageModel.default.capabilities

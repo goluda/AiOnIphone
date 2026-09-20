@@ -10,10 +10,10 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !model.running {
-                ContentUnavailableView("Serwer wyłączony", systemImage: "wifi.slash",
-                    description: Text("Uruchom serwer, aby czatować."))
+                ContentUnavailableView("Server offline", systemImage: "wifi.slash",
+                    description: Text("Start the server to chat."))
                     .frame(maxHeight: .infinity)
-                Button("Start serwera") { model.start() }.buttonStyle(.borderedProminent).padding(.bottom)
+                Button("Start server") { model.start() }.buttonStyle(.borderedProminent).padding(.bottom)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -41,7 +41,7 @@ struct ChatView: View {
                         .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal)
                 }
                 HStack {
-                    TextField("Napisz wiadomość…", text: $vm.draft, axis: .vertical)
+                    TextField("Type a message…", text: $vm.draft, axis: .vertical)
                         .lineLimit(1...4)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { vm.send() }
@@ -55,7 +55,7 @@ struct ChatView: View {
                 }.padding()
             }
         }
-        .navigationTitle("Czat")
+        .navigationTitle("Chat")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Picker("Model", selection: $vm.selectedModel) {

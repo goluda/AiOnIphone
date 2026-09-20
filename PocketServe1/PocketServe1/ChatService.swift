@@ -6,7 +6,7 @@ struct ChatServiceError: LocalizedError {
     var errorDescription: String? { userMessage }
 }
 
-// Klient loopback-API własnego serwera: czat w aplikacji przechodzi przez ten sam HTTP co zewnętrzni klienci.
+// Loopback API client for our own server: in-app chat goes through the same HTTP as external clients.
 @MainActor
 final class ChatService {
     private var activeTask: Task<Void, Never>?
@@ -24,12 +24,12 @@ final class ChatService {
                 var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
                 req.httpMethod = "POST"
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                req.timeoutInterval = 300 // mlx: pierwsze tokeny mogą trwać długo
+                req.timeoutInterval = 300 // mlx: first tokens can take a long time
                 do {
                     req.httpBody = try JSONEncoder().encode(request)
                     let (bytes, response) = try await URLSession.shared.bytes(for: req)
                     guard let http = response as? HTTPURLResponse else {
-                        throw ChatServiceError(userMessage: "Nieoczekiwana odpowiedź serwera")
+                        throw ChatServiceError(userMessage: "Unexpected server response")
                     }
                     if http.statusCode != 200 {
                         var body = Data()
@@ -41,7 +41,7 @@ final class ChatService {
                     for try await b in bytes {
                         for payload in parser.feed(Data([b])) {
                             let data = Data(payload.utf8)
-                            // Ramka błędu w trakcie streamu (SSEEncoder.encodeError) → przerwij z komunikatem.
+                            // Error frame mid-stream (SSEEncoder.encodeError) → abort with message.
                             if let err = try? JSONDecoder().decode(OpenAIErrorBody.self, from: data) {
                                 throw ChatServiceError(userMessage: err.error.message)
                             }
@@ -53,11 +53,11 @@ final class ChatService {
                     }
                     continuation.finish()
                 } catch is CancellationError {
-                    continuation.finish() // Stop przycisku — normalne zakończenie
+                    continuation.finish() // Stop button — normal termination
                 } catch let e as ChatServiceError {
                     continuation.finish(throwing: e)
                 } catch {
-                    continuation.finish(throwing: ChatServiceError(userMessage: "Brak połączenia z serwerem — uruchom go na ekranie głównym"))
+                    continuation.finish(throwing: ChatServiceError(userMessage: "No connection to the server — start it on the home screen"))
                 }
             }
             activeTask = task
@@ -69,11 +69,11 @@ final class ChatService {
 
     static func mapError(status: Int, detail: String?) -> String {
         switch status {
-        case 404: return detail ?? "Nieznany model"
-        case 409: return "Model nie załadowany — wczytaj go w widoku Modele"
-        case 429: return "Serwer zajęty — poczekaj na koniec bieżącego żądania"
-        case 400: return "Złe zapytanie do serwera"
-        default: return detail ?? "Błąd serwera (\(status))"
+        case 404: return detail ?? "Unknown model"
+        case 409: return "Model not loaded — load it in the Models view"
+        case 429: return "Server busy — wait for the current request to finish"
+        case 400: return "Bad request"
+        default: return detail ?? "Server error (\(status))"
         }
     }
 }

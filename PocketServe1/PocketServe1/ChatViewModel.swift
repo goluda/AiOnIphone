@@ -22,7 +22,7 @@ final class ChatViewModel: ObservableObject {
         do {
             availableModels = try await service.models(port: sm.port)
             if !availableModels.contains(selectedModel), let first = availableModels.first { selectedModel = first }
-        } catch { /* serwer wyłączony — placeholder UI pokrywa stan */ }
+        } catch { /* server off — placeholder UI covers the state */ }
     }
 
     func send() {

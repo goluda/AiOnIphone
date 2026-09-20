@@ -3,28 +3,28 @@ import OpenAICompat
 import SwiftUI
 import Combine
 
-@MainActor final class ServerModel: NSObject, ObservableObject { // NSObject: wymóg NetServiceDelegate (NSObjectProtocol)
+@MainActor final class ServerModel: NSObject, ObservableObject { // NSObject: NetServiceDelegate requirement (NSObjectProtocol)
     @Published var running = false
     @Published var port: UInt16 = 8080
     @Published var address = "—"
     private var server: HTTPServer
     private var ext: ServerExtension?
     private var netService: NetService?
-    private(set) lazy var viewModel = ModelsViewModel(serverModel: self) // init VM woła attach — oficjalny kanał montażu
+    private(set) lazy var viewModel = ModelsViewModel(serverModel: self) // VM init calls attach — the official mounting channel
 
     override init() {
         server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared]) { await RequestLog.shared.record($0) }
     }
 
     func attach(extension: ServerExtension) {
-        ext = `extension` // retain; serwer żyje ten sam — montaż /x/* przez setExtension, bez restartu nasłuchu
+        ext = `extension` // retain; same server keeps running — /x/* mounted via setExtension, no listener restart
         let server = server
         Task { await server.setExtension(`extension`) }
     }
 
     func start() {
         _ = viewModel // montuj /x/* zanim server.start()
-        _ = Task { do { port = try await server.start(port: 8080); address = Self.localIPAddress() ?? "brak LAN"; running = true; publishBonjour() } } // brief: błąd ignorowany jawnie
+        _ = Task { do { port = try await server.start(port: 8080); address = Self.localIPAddress() ?? "no LAN"; running = true; publishBonjour() } } // brief: error explicitly ignored
     }
     func stop() { netService?.stop(); Task { await server.stop() }; running = false }
     private func publishBonjour() {

@@ -5,23 +5,23 @@ struct EndpointsView: View {
 
     private struct Row: Identifiable { let id = UUID(); let method: String; let path: String; let desc: String }
     private let inferenceRows: [Row] = [
-        .init(method: "GET", path: "/health", desc: "zdrowie serwera"),
-        .init(method: "GET", path: "/v1/models", desc: "lista modeli"),
+        .init(method: "GET", path: "/health", desc: "server health"),
+        .init(method: "GET", path: "/v1/models", desc: "model list"),
         .init(method: "POST", path: "/v1/chat/completions", desc: "OpenAI shape — stream + JSON"),
         .init(method: "POST", path: "/v1/messages", desc: "Anthropic shape — stream + JSON"),
     ]
     private let mgmtRows: [Row] = [
-        .init(method: "GET", path: "/x/models", desc: "lista + stany modeli"),
-        .init(method: "POST", path: "/x/download", desc: "import z Hugging Face"),
-        .init(method: "GET", path: "/x/download/status", desc: "postęp pobierania"),
-        .init(method: "POST", path: "/x/models/load", desc: "wczytaj silnik"),
-        .init(method: "POST", path: "/x/models/unload", desc: "odładuj silnik"),
-        .init(method: "DELETE", path: "/x/models/{id}", desc: "usuń pliki modelu"),
+        .init(method: "GET", path: "/x/models", desc: "list + model states"),
+        .init(method: "POST", path: "/x/download", desc: "import from Hugging Face"),
+        .init(method: "GET", path: "/x/download/status", desc: "download progress"),
+        .init(method: "POST", path: "/x/models/load", desc: "load engine"),
+        .init(method: "POST", path: "/x/models/unload", desc: "unload engine"),
+        .init(method: "DELETE", path: "/x/models/{id}", desc: "delete model files"),
     ]
 
     var body: some View {
         List {
-            Section("Baza URL") {
+            Section("Base URL") {
                 if model.running {
                     HStack {
                         Text("http://\(model.address):\(model.port)")
@@ -32,16 +32,16 @@ struct EndpointsView: View {
                         }
                     }
                 } else {
-                    Text("serwer wyłączony").foregroundStyle(.secondary)
+                    Text("server off").foregroundStyle(.secondary)
                 }
             }
             Section("Inference") { rows(inferenceRows) }
-            Section("Zarządzanie (/x/*)") { rows(mgmtRows) }
-            Section("Kody błędów") {
-                Text("429 — serwer zajęty (busy)").font(.caption)
-                Text("409 — model nie załadowany").font(.caption)
-                Text("404 — nieznany model / endpoint").font(.caption)
-                Text("400 — złe zapytanie").font(.caption)
+            Section("Management (/x/*)") { rows(mgmtRows) }
+            Section("Error codes") {
+                Text("429 — server busy").font(.caption)
+                Text("409 — model not loaded").font(.caption)
+                Text("404 — unknown model / endpoint").font(.caption)
+                Text("400 — bad request").font(.caption)
             }
         }
         .navigationTitle("API")
