@@ -118,20 +118,26 @@ public actor HTTPServer {
             }
             return // /x/* never busy-gated
         }
-        guard req.method == "POST", req.path == "/v1/chat/completions" else {
+guard req.method == "POST", req.path == "/v1/chat/completions" || req.path == "/v1/messages" else {
             sendError(conn, 404, "not_found"); return
         }
-        guard !busy else { sendError(conn, 429, "server_busy"); return }
+        let wire: WireFormat = req.path == "/v1/messages" ? .anthropic : .openAI
+        guard !busy else { sendError(conn, 429, "server_busy", wire: wire); return }
         let request: ChatCompletionRequest
         do { request = try JSONDecoder().decode(ChatCompletionRequest.self, from: req.body) }
-        catch { sendError(conn, 400, "invalid_request_error"); return }
+        catch { sendError(conn, 400, "invalid_request_error", wire: wire); return }
+        await runInference(request, conn, wire: wire)
+    }
+
+    // Shared pipeline for /v1/chat/completions (.openAI) and /v1/messages (.anthropic). Busy-gate held by caller.
+    private func runInference(_ request: ChatCompletionRequest, _ conn: NWConnection, wire: WireFormat) async {
         // exact-match pomija placeholdery silników dynamicznych (np. "mlx:none" gdy niezaładowany)
         guard let engine = engines.first(where: { $0.id == request.model && ($0.listedModel != nil || $0.prefixOwned == nil) }) else {
             // dynamic-id silnik (mlx): prefiks czyj, ale model nie załadowany → 409 (spec §6), nie 404
             if engines.contains(where: { ($0.prefixOwned.map { request.model.hasPrefix($0) }) ?? false }) {
-                sendError(conn, 409, "model_not_ready")
+                sendError(conn, 409, "model_not_ready", wire: wire)
             } else {
-                sendError(conn, 404, "model_not_found")
+                sendError(conn, 404, "model_not_found", wire: wire)
             }
             return
         }
@@ -141,36 +147,66 @@ public actor HTTPServer {
         let kept = ContextTruncator.truncate(messages: request.messages, budgetTokens: engine.contextWindow - maxTokens).kept
         let prompt = PromptBuilder.prompt(from: kept)
         let params = GenerationParams(temperature: request.temperature, maxTokens: maxTokens)
-        let id = "chatcmpl-\(UUID().uuidString.prefix(8))"
+        let id = "\(wire == .anthropic ? "msg_" : "chatcmpl-")\(UUID().uuidString.prefix(8))"
         let created = Int(Date().timeIntervalSince1970)
+        let promptTokens = TokenCounter.approximate(prompt)
         if request.stream {
             let header = Data("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n".utf8)
             conn.send(content: header, completion: .contentProcessed { _ in })
             do {
-                for try await token in engine.stream(prompt: prompt, params: params) {
-                    let chunk = ChatCompletionChunk(id: id, created: created, model: request.model,
-                        choices: [.init(index: 0, delta: .init(content: token), finishReason: nil)])
-                    conn.send(content: try SSEEncoder.encode(chunk), completion: .contentProcessed { _ in })
+                if wire == .anthropic {
+                    conn.send(content: try AnthropicSSEEncoder.messageStart(id: id, model: request.model,
+                        usage: AnthropicUsage(inputTokens: promptTokens, outputTokens: 0)), completion: .contentProcessed { _ in })
+                    conn.send(content: try AnthropicSSEEncoder.contentBlockStart(), completion: .contentProcessed { _ in })
+                    conn.send(content: try AnthropicSSEEncoder.ping(), completion: .contentProcessed { _ in })
+                    var out = ""
+                    for try await token in engine.stream(prompt: prompt, params: params) {
+                        out += token
+                        conn.send(content: try AnthropicSSEEncoder.contentBlockDelta(text: token), completion: .contentProcessed { _ in })
+                    }
+                    conn.send(content: try AnthropicSSEEncoder.contentBlockStop(), completion: .contentProcessed { _ in })
+                    conn.send(content: try AnthropicSSEEncoder.messageDelta(stopReason: "end_turn",
+                        outputTokens: TokenCounter.approximate(out)), completion: .contentProcessed { _ in })
+                    conn.send(content: try AnthropicSSEEncoder.messageStop(), completion: .contentProcessed { _ in conn.cancel() })
+                } else {
+                    for try await token in engine.stream(prompt: prompt, params: params) {
+                        let chunk = ChatCompletionChunk(id: id, created: created, model: request.model,
+                            choices: [.init(index: 0, delta: .init(content: token), finishReason: nil)])
+                        conn.send(content: try SSEEncoder.encode(chunk), completion: .contentProcessed { _ in })
+                    }
+                    let end = ChatCompletionChunk(id: id, created: created, model: request.model,
+                        choices: [.init(index: 0, delta: .init(content: nil), finishReason: "stop")])
+                        conn.send(content: try SSEEncoder.encode(end), completion: .contentProcessed { _ in })
+                    conn.send(content: SSEEncoder.done, completion: .contentProcessed { _ in conn.cancel() })
                 }
-                let end = ChatCompletionChunk(id: id, created: created, model: request.model,
-                    choices: [.init(index: 0, delta: .init(content: nil), finishReason: "stop")])
-                conn.send(content: try SSEEncoder.encode(end), completion: .contentProcessed { _ in })
-                conn.send(content: SSEEncoder.done, completion: .contentProcessed { _ in conn.cancel() })
             } catch {
-                // I-1: silnik rzucił w trakcie streamu → SSE error event + [DONE], czyste zamknięcie (bez RST).
+                // I-1: silnik rzucił w trakcie streamu → error event + czyste zamknięcie (bez RST).
                 let msg = (error as? LocalizedError)?.errorDescription ?? "\(error)"
-                conn.send(content: SSEEncoder.encodeError(msg), completion: .contentProcessed { _ in })
-                conn.send(content: SSEEncoder.done, completion: .contentProcessed { _ in conn.cancel() })
+                do {
+                    if wire == .anthropic {
+                        conn.send(content: try AnthropicSSEEncoder.error(message: msg), completion: .contentProcessed { _ in })
+                        conn.send(content: Data("\n".utf8), completion: .contentProcessed { _ in conn.cancel() })
+                    } else {
+                        conn.send(content: SSEEncoder.encodeError(msg), completion: .contentProcessed { _ in })
+                        conn.send(content: SSEEncoder.done, completion: .contentProcessed { _ in conn.cancel() })
+                    }
+                } catch { conn.cancel() }
             }
         } else {
             var full = ""
             do { for try await t in engine.stream(prompt: prompt, params: params) { full += t } }
-            catch { sendError(conn, 500, "server_error"); return }
-            let usage = Usage(promptTokens: TokenCounter.approximate(prompt),
-                              completionTokens: TokenCounter.approximate(full))
-            let resp = CompletionResponse(id: id, created: created, model: request.model,
-                choices: [.init(index: 0, message: ChatMessage(role: "assistant", content: full), finishReason: "stop")], usage: usage)
-            sendJSON(conn, 200, try! JSONEncoder().encode(resp))
+            catch { sendError(conn, 500, "server_error", wire: wire); return }
+            if wire == .anthropic {
+                let resp = AnthropicMessageResponse(id: id, model: request.model,
+                    content: [AnthropicContentBlock(text: full)], stopReason: "end_turn",
+                    usage: AnthropicUsage(inputTokens: promptTokens, outputTokens: TokenCounter.approximate(full)))
+                sendJSON(conn, 200, try! JSONEncoder().encode(resp))
+            } else {
+                let usage = Usage(promptTokens: promptTokens, completionTokens: TokenCounter.approximate(full))
+                let resp = CompletionResponse(id: id, created: created, model: request.model,
+                    choices: [.init(index: 0, message: ChatMessage(role: "assistant", content: full), finishReason: "stop")], usage: usage)
+                sendJSON(conn, 200, try! JSONEncoder().encode(resp))
+            }
         }
     }
 
@@ -191,8 +227,25 @@ public actor HTTPServer {
         return d.id
     }
 
-    private func sendError(_ conn: NWConnection, _ status: Int, _ type: String) {
-        sendJSON(conn, status, try! JSONEncoder().encode(OpenAIErrorBody(message: type, type: type)))
+    enum WireFormat { case openAI, anthropic }
+
+    private static func anthropicErrorType(status: Int) -> String {
+        switch status {
+        case 429: return "rate_limit_error"
+        case 404: return "not_found_error"
+        case 400, 409: return "invalid_request_error"
+        default: return "api_error"
+        }
+    }
+
+    private func sendError(_ conn: NWConnection, _ status: Int, _ type: String, wire: WireFormat = .openAI) {
+        switch wire {
+        case .openAI:
+            sendJSON(conn, status, try! JSONEncoder().encode(OpenAIErrorBody(message: type, type: type)))
+        case .anthropic:
+            sendJSON(conn, status, try! JSONEncoder().encode(
+                AnthropicErrorBody(errorType: Self.anthropicErrorType(status: status), message: type)))
+        }
     }
 }
 
