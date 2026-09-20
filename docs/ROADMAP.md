@@ -28,10 +28,10 @@ Make the server survive the phone going idle. Today the OS suspends the app the 
 - [ ] Models screen shows an explicit Apple AFM card with live availability; graceful guidance if AFM disabled.
 - [ ] BackgroundTask grant still correct around active generation (`BackgroundGuard` unchanged semantics).
 
-## Phase 3 — Cross-platform "Companion" client (.NET Avalonia) 🔶 (code done on `feat/avalonia-companion`)
+## Phase 3 — Cross-platform "Companion" client (.NET Avalonia) ✅ (merged to `main` 2026-09-20; PR #3, hotfix PR #4)
 Desktop client in **C# / Avalonia** (macOS + Windows + Linux from one codebase — re-pointed from the original macOS-only Swift idea, user decision 2026-09-20). Manual IP entry, model picker fed by `/v1/models`, streaming chat over SSE. Lives in `companion/`; design `docs/superpowers/specs/2026-09-20-avalonia-companion-design.md`, plan `docs/superpowers/plans/2026-09-20-avalonia-companion.md`.
 ### Scope
-- `companion/src/PocketServe.Companion.Core` — BCL-only: `ServerAddress`, `SseReader`, `PocketServeClient` (+ Polish error mapping 400/404/409/429/500), `ChatState`. NUnit+Shouldly, 41 tests green on Mac.
+- `companion/src/PocketServe.Companion.Core` — BCL-only: `ServerAddress`, `SseReader`, `PocketServeClient` (+ Polish error mapping 400/404/409/429/500), `ChatState`. NUnit+Shouldly, 42 tests green on Mac.
 - `companion/src/PocketServe.Companion.App` — Avalonia UI: connect bar (host/port + status dot), model ComboBox + refresh, streaming chat bubbles with Stop, error banner, `settings.json` last-address persistence.
 - Explicit non-goals this phase: Bonjour auto-discovery, `/x/*` model management, auth, temperature controls, Markdown rendering, offline persistence of transcripts.
 ### Acceptance
@@ -39,7 +39,7 @@ Desktop client in **C# / Avalonia** (macOS + Windows + Linux from one codebase �
 - [x] Model picker populated from `GET /v1/models`; selection preserved across refreshes.
 - [x] Streaming chat renders deltas live (`stream:true` SSE), Stop cancels mid-stream.
 - [x] Server-busy (429) / model-not-ready (409) / offline shown as Polish UX messages.
-- [ ] Device smoke against a live iPhone (`companion/RUN_COMPANION.md` checklist).
+- [x] Device smoke against a live iPhone (`companion/RUN_COMPANION.md` checklist) — 2026-09-20: connect, `apple-afm` picker, streaming chat OK. First live run failed with `invalid_request_error`; root cause was chunked request bodies from `HttpClient` vs `Content-Length`-only parsing on iOS (fixed in PR #4, tracked server-side as F4 in KNOWN_ISSUES).
 
 ## Phase 4 — Public launch / i18n / App Store ⬜
 The user wants to make the iPhone app **public**.
