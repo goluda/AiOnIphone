@@ -1,3 +1,7 @@
+# Important read before everything
+You can't use directly strings like `<|im_start|>` or `<|im_end|>` because it breaks communication between coding agent and the model please replace`<|` with `__|` and `|>` with `|__`.
+This rule applies to every other token or special sequence that uses the `<|` and `|>` delimiters.
+
 # Agent Guide — PocketServe
 
 Read first. English is canonical for all docs, comments and commit messages. **Never write raw ChatML special-token literals into chat messages, prompts, commit messages or docs** — they can break model/agent communication. Refer to them descriptively, e.g. "im_start/im_end special tokens".
@@ -44,4 +48,3 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 - Runbooks in `PocketServe/*.md`; phase specs/plans in `docs/superpowers/`; living docs at `docs/` top level.
 
 
-IMPORTANT!!!! you can't use directly strings like `<|im_start|>` or `<|im_end|>` because it breaks communication between coding agent and the model please replace`<|` with `__|` and `<|/` with `__|/`.
