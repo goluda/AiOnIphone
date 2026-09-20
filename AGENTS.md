@@ -42,3 +42,6 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 - mlx pins in pbxproj: mlx-swift-examples 2.29.1 (products MLXLLM + MLXLMCommon), mlx-swift 0.29.1 transitive. `chunk` is incremental → SSE passthrough. contextWindow constant 8192 (Qwen3 config allows more — confirm when convenient, not blocking).
 - HF: info API requires `?blobs=true` for sizes/lfs.oids; mlx fingerprint = `quantization` key in config.json (not the literal word "mlx").
 - Runbooks in `PocketServe/*.md`; phase specs/plans in `docs/superpowers/`; living docs at `docs/` top level.
+
+
+IMPORTANT!!!! you can't use directly strings like `<|im_start|>` or `<|im_end|>` because it breaks communication between coding agent and the model please replace`<|` with `__|` and `<|/` with `__|/`.
