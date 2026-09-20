@@ -4,7 +4,7 @@ using System.Net;
 using System.Text;
 
 /// <summary>Recorded request; body is buffered because HttpClient disposes request content after send.</summary>
-internal sealed record RecordedRequest(Uri? RequestUri, string Body);
+internal sealed record RecordedRequest(Uri? RequestUri, string Body, long? ContentLength);
 
 /// <summary>HttpMessageHandler returning canned responses per queued delegate.</summary>
 internal sealed class FakeHandler : HttpMessageHandler
@@ -20,8 +20,12 @@ internal sealed class FakeHandler : HttpMessageHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        // Length must be captured BEFORE reading the body: lazily-buffered content
+        // (e.g. JsonContent) fills Content-Length only after serialization,
+        // which would mask a chunked wire transfer.
+        var contentLength = request.Content?.Headers.ContentLength;
         var body = request.Content is not null ? await request.Content.ReadAsStringAsync(cancellationToken) : string.Empty;
-        Requests.Add(new RecordedRequest(request.RequestUri, body));
+        Requests.Add(new RecordedRequest(request.RequestUri, body, contentLength));
         return _respond(request);
     }
 

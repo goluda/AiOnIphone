@@ -73,6 +73,23 @@ public sealed class PocketServeClientTests
     }
 
     [Test]
+    public async Task StreamChatAsync_PostsContentLength_ServersRejectChunked()
+    {
+        using var handler = new FakeHandler(_ => FakeHandler.Sse(Chunk("ok") + "data: [DONE]\n\n"));
+        var client = ClientWith(handler);
+
+        var received = 0;
+        await foreach (var _ in client.StreamChatAsync(Addr, Req(), CancellationToken.None))
+        {
+            received++;
+        }
+
+        received.ShouldBe(1);
+        // iOS RequestParser reads only Content-Length; chunked bodies arrive empty -> 400.
+        handler.Requests.ShouldHaveSingleItem().ContentLength.ShouldNotBeNull();
+    }
+
+    [Test]
     public void StreamChatAsync_MidStreamError_ThrowsWithFrameMessage()
     {
         var sse =

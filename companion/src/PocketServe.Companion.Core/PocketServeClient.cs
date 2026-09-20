@@ -2,6 +2,7 @@ namespace PocketServe.Companion.Core;
 
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 
 /// <summary>Minimal OpenAI-compatible client for a PocketServe iPhone.</summary>
@@ -28,10 +29,13 @@ public sealed class PocketServeClient(HttpClient http)
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken ct)
     {
+        // iPhone RequestParser reads only Content-Length; JsonContent streams lazily
+        // (Transfer-Encoding: chunked) and the body arrives empty -> 400.
+        var jsonBody = new StringContent(JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json");
         using var response = await SendAsync(
             HttpMethod.Post,
             $"{address.BaseUrl}/v1/chat/completions",
-            JsonContent.Create(request, options: JsonOptions),
+            jsonBody,
             ct);
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
