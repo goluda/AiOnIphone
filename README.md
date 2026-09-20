@@ -11,6 +11,7 @@ Run a private, offline-first AI endpoint from a phone you already carry — no c
 - **Phase 1 — Apple AFM endpoint:** merged, working on device.
 - **Phase 2 — MLX engine + HF model management + iOS UI:** merged to `main`; device smoke passed; live-discovered defects tracked in [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). See [HANDOFF-PHASE2-CLOSEOUT.md](docs/HANDOFF-PHASE2-CLOSEOUT.md).
 - **`POST /v1/messages` (Anthropic-shape responses):** merged — see PR #1; device smoke passed 2026-09-20.
+- **In-app testing:** "API" screen (endpoint list + copyable base URL) and minimal **"Czat"** chat window (streams from the loaded model via loopback `/v1/chat/completions`) — implemented, pending manual device test.
 - **Phase 2.5 — always-on server (no screen-timeout kill):** not started.
 - **Phase 3 — macOS "Companion" client:** not started.
 - **Phase 4 — public launch / English localization / App Store prep:** not started.
@@ -46,6 +47,8 @@ Details & layer rules: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | `POST /x/download` · `POST /x/models/load` · `POST /x/models/unload` · `DELETE /x/models/<id>` | accepted / status JSON | HF download & lifecycle management. |
 
 Error codes: `429` busy (`server_busy`), `404` unknown model, `409` `mlx:` prefix owned but model not loaded (`model_not_ready`), `400` malformed body, `500` engine failure. On `/v1/messages` errors use the Anthropic envelope (`{"type":"error","error":{"type":...,"message":...}}`).
+
+The iPhone app itself mirrors this list on its **API** screen and offers an in-app **Czat** tab that exercises `/v1/chat/completions` against the built-in server over loopback (`http://127.0.0.1:8080`) — stream tokens live, model picker, Stop button.
 
 ## Repositories / model IDs
 - `apple-afm` — Apple FoundationModels (default, no download).

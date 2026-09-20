@@ -16,6 +16,7 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 - `feat/pocketserve-phase2` = Phase 2 code, **19 commits ahead of master, NOT merged**.
 - Green on Mac: ModelKit **22/22**, OpenAICompat **50/50**; iOS Simulator `BUILD SUCCEEDED`.
 - Device smoke passed end-to-end (import→download→load→mlx chat→409/429→unload→delete), with defects found live.
+- `POST /v1/messages` (Anthropic shape) merged (PR #1). In-app **Czat** + **API** screens implemented (`feat/inapp-endpoints-chat`) — manual device test pending.
 - **Start every new session from: [docs/HANDOFF-PHASE2-CLOSEOUT.md](docs/HANDOFF-PHASE2-CLOSEOUT.md)**.
 
 ## BACKLOG (user-requested — carry across sessions, do not drop)
