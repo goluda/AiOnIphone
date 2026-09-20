@@ -27,12 +27,12 @@ Row state machine per `ModelRecord` + engine: `idle → downloading % → ready 
 - **Leading swipe (swipe right):** LOAD when `ready`; UNLOAD when `loaded`. Hidden otherwise.
 - **Trailing swipe (swipe left):** DELETE files, always `.destructive` + confirmation dialog ("Delete <repo> files?"). Blocked with clear message while `loading`/`loaded`.
 - Inline buttons removed (swipes + row status chip only); retry stays a visible button on `failed` rows (discovery > purity there).
-- Row shows: repo (headline), `quant · size · state chip`, spinner + elapsed seconds while `loading…`.
+- Row shows: repo (headline), `quant · size · state chip`, spinner while `LOADING…` (engine load takes 5–30 s on device — this visibility is the core ask).
 - `navigationSubtitle` = loaded model or "apple-afm only".
-- VM polls every 1 s while any row is `downloading` or `loading` (load poll is new — engine load takes 5–30 s on device).
+- Load/delete state lives in-process in the VM (`@Published loadingId/deletingId` set around `coordinator.load/delete` await) — no extra polling needed; existing 1 s poll still covers `downloading`.
 
 ### 3. Coordinator correctness (ModelKit)
-- Replace single `loadSlotBusy` with explicit `operation: Idle | Downloading | Loading | Deleting`; each guard throws its own error: `.loadInProgress`, `.unloadInProgress`, `.deleteInProgress` (kept `downloadInProgress` for the downloader). App maps each to distinct English text.
+- Replace single `loadSlotBusy` with explicit `operation: Idle | Loading | Deleting`; guards throw distinct cases: `.loadInProgress`, `.deleteInProgress` (`downloadInProgress` stays reserved for the downloader's real download-in-progress). **Wire tokens unchanged** (bridge maps the new cases to `downloadInProgress` → 409 `download_in_progress`; no `ServerExtension`/spec §5 drift) — the truthful per-op English text is what the in-app UI shows via `humanize`.
 - Add `URLSessionConfiguration` with `timeoutIntervalForRequest = 60` / `resource = 600` to `HFDownloader` session (app composition) so a stalled file fails into `.failed` + retry instead of parking forever.
 - `.notLoaded` on delete keeps `model_loaded` semantics (spec §5 unchanged); only the **misleading token** changes.
 
