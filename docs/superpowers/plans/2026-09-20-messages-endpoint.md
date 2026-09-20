@@ -21,14 +21,14 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|---|---|---|
-| `Packages/OpenAICompat/Sources/OpenAICompat/AnthropicModels.swift` | Create | Anthropic response DTOs |
-| `Packages/OpenAICompat/Sources/OpenAICompat/AnthropicSSEEncoder.swift` | Create | SSE frame encoder for Anthropic events |
-| `Packages/OpenAICompat/Tests/OpenAICompatTests/AnthropicSSEEncoderTests.swift` | Create | Encoder unit tests |
-| `Packages/OpenAICompat/Sources/OpenAICompat/HTTPServer.swift` | Modify | `WireFormat`, `runInference` extraction, wire-aware `sendError`, `/v1/messages` route |
-| `Packages/OpenAICompat/Tests/OpenAICompatTests/MessagesRoutesTests.swift` | Create | Route tests: JSON, SSE sequence, gates 429/404/409, 400, mid-stream error |
-| `PocketServe/RUN_ON_IPHONE_PHASE2.md` | Modify | §4: add `/v1/messages` device smoke step |
+| File                                                                           | Action | Responsibility                                                                        |
+| ------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------- |
+| `Packages/OpenAICompat/Sources/OpenAICompat/AnthropicModels.swift`             | Create | Anthropic response DTOs                                                               |
+| `Packages/OpenAICompat/Sources/OpenAICompat/AnthropicSSEEncoder.swift`         | Create | SSE frame encoder for Anthropic events                                                |
+| `Packages/OpenAICompat/Tests/OpenAICompatTests/AnthropicSSEEncoderTests.swift` | Create | Encoder unit tests                                                                    |
+| `Packages/OpenAICompat/Sources/OpenAICompat/HTTPServer.swift`                  | Modify | `WireFormat`, `runInference` extraction, wire-aware `sendError`, `/v1/messages` route |
+| `Packages/OpenAICompat/Tests/OpenAICompatTests/MessagesRoutesTests.swift`      | Create | Route tests: JSON, SSE sequence, gates 429/404/409, 400, mid-stream error             |
+| `PocketServe/RUN_ON_IPHONE_PHASE2.md`                                          | Modify | §4: add `/v1/messages` device smoke step                                              |
 
 SwiftPM auto-discovers new files in `Sources/`/`Tests/` — no `Package.swift` edits.
 

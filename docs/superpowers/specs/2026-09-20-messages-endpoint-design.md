@@ -86,14 +86,14 @@ Header: `HTTP/1.1 200 OK`, `Content-Type: text/event-stream`, `Cache-Control: no
 Same trigger points and HTTP statuses as `/v1/chat/completions`; envelope in Anthropic shape:
 `{"type":"error","error":{"type":"<anthropic error type>","message":"<token>"}}`.
 
-| Situation | HTTP | `error.type` | `message` |
-|---|---|---|---|
-| busy (second concurrent request) | 429 | `rate_limit_error` | `server_busy` |
-| unknown model id | 404 | `not_found_error` | `model_not_found` |
-| owned prefix, not loaded (mlx) | 409 | `invalid_request_error` | `model_not_ready` |
-| malformed request JSON | 400 | `invalid_request_error` | parse detail |
-| engine throws before stream | 500 | `api_error` | localized description |
-| engine throws mid-stream | (200 open) | `error` event then close | message |
+| Situation                        | HTTP       | `error.type`             | `message`             |
+| -------------------------------- | ---------- | ------------------------ | --------------------- |
+| busy (second concurrent request) | 429        | `rate_limit_error`       | `server_busy`         |
+| unknown model id                 | 404        | `not_found_error`        | `model_not_found`     |
+| owned prefix, not loaded (mlx)   | 409        | `invalid_request_error`  | `model_not_ready`     |
+| malformed request JSON           | 400        | `invalid_request_error`  | parse detail          |
+| engine throws before stream      | 500        | `api_error`              | localized description |
+| engine throws mid-stream         | (200 open) | `error` event then close | message               |
 
 Mid-stream failure: send `event: error` with the error body, then close the stream cleanly
 (no RST) — mirrors the existing I-1 behavior for chat completions.
