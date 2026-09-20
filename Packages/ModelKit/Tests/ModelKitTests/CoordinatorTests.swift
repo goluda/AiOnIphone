@@ -120,17 +120,33 @@ final class CoordinatorTests: XCTestCase {
         let t1 = Task { () -> Result<Void, Error> in do { try await c.load(id: "mlx:s"); return .success(()) } catch { return .failure(error) } }
         let t2 = Task { () -> Result<Void, Error> in do { try await c.load(id: "mlx:s"); return .success(()) } catch { return .failure(error) } }
         let outcomes = [await t1.value, await t2.value]
-        var successes = 0, inProgress = 0
+        var successes = 0, rejected = 0
         for o in outcomes {
             switch o {
             case .success: successes += 1
             case .failure(let e):
-                if (e as? DownloadAPIError) == .downloadInProgress { inProgress += 1 } else { XCTFail("\(e)") }
+                if (e as? DownloadAPIError) == .loadInProgress { rejected += 1 } else { XCTFail("\(e)") }
             }
         }
         XCTAssertEqual(successes, 1)
-        XCTAssertEqual(inProgress, 1)
+        XCTAssertEqual(rejected, 1)
         XCTAssertEqual(loader.loadCalls, 1) // odrzucony nie dotarł do loadera
+    }
+
+    // UK-1: delete podczas ładowania musi odrzucić z uczciwym błędem, nie "download in progress".
+    func testDeleteDuringLoadRejected() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("models"), withIntermediateDirectories: true)
+        let store = ModelStore(root: root)
+        await store.upsert(ModelRecord(id: "mlx:s", repo: "s", revision: "r", quant: nil, bytesOnDisk: 5, downloadedAt: Date(), state: .ready))
+        let c = DownloadCoordinator(downloader: nil, store: store, loader: SlowLoader())
+        let load = Task { try? await c.load(id: "mlx:s") }
+        try await Task.sleep(nanoseconds: 50_000_000) // w oknie 100 ms SlowLoadera
+        do { try await c.delete(id: "mlx:s"); XCTFail("delete musi być odrzucone podczas load") }
+        catch DownloadAPIError.loadInProgress {}
+        _ = await load.value
+        try await c.unload(id: "mlx:s")
+        try await c.delete(id: "mlx:s") // po zakończeniu load — przechodzi
     }
 
     func testStartNormalizesRawErrors() async throws {
