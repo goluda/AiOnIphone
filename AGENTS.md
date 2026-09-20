@@ -17,6 +17,7 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 - Green on Mac: ModelKit **22/22**, OpenAICompat **50/50**; iOS Simulator `BUILD SUCCEEDED`.
 - Device smoke passed end-to-end (import→download→load→mlx chat→409/429→unload→delete), with defects found live.
 - `POST /v1/messages` (Anthropic shape) merged (PR #1). In-app **Czat** + **API** screens implemented (`feat/inapp-endpoints-chat`) — manual device test pending.
+- **Phase 3 Companion re-pointed to .NET Avalonia** (cross-platform, user decision 2026-09-20): code in `companion/`, branch `feat/avalonia-companion` — Core 41/41 tests green, app builds & launches on Mac; device smoke pending. Spec/plan under `docs/superpowers/` (`2026-09-20-avalonia-companion*`).
 - **Start every new session from: [docs/HANDOFF-PHASE2-CLOSEOUT.md](docs/HANDOFF-PHASE2-CLOSEOUT.md)**.
 
 ## BACKLOG (user-requested — carry across sessions, do not drop)
@@ -33,6 +34,7 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 3. App target `PocketServe1` — the only UIKit/SwiftUI/MLX/FoundationModels home.
 4. Model ids: `mlx:<repo>` end-to-end (record id, engine id, /v1/models, chat dispatch); `apple-afm`; placeholder `mlx:none` never listed, never routable.
 5. Error tokens (spec §5): load-not-ready `download_not_ready`, unload-not-loaded `model_not_loaded`, delete-loaded `model_loaded`, busy `server_busy`, memory `memory_pressure`; unknown-id: load→400, delete→404.
+6. `companion/` (.NET 10 Avalonia desktop client): `PocketServe.Companion.Core` = BCL-only (System.Net.Http / System.Text.Json, zero Avalonia refs); `PocketServe.Companion.App` = Avalonia UI consuming Core. English code/comments, Polish user-facing UI strings. Build/test: `dotnet test companion/PocketServe.Companion.slnx`.
 
 ## Environment quirks (this machine)
 - `/usr/local/bin/swift` and `rg` are broken shims → always `PATH=/usr/bin:$PATH swift …`; use built-in grep.
