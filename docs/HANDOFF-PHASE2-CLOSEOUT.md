@@ -8,8 +8,7 @@
 - Device smoke (iPhone 18 Pro Max, `192.168.68.27:8080`) — **passed**: `/health`, `/x/models`, `/x/download/status` (non-zero `bytes_total` → `?blobs=true` confirmed), `/v1/models` (apple-afm + `mlx:…`, context_window 8192), mlx non-stream chat (296 tok) + SSE (82 frames + `[DONE]`), **429** single-flight, **409** `model_not_ready` after unload, DELETE 200/404 semantics, unknown-id load → 400.
 
 ## What blocks merge
-1. **F1 — think-span leak (HIGH).** Every mlx completion (content + SSE) carries the model's raw chain-of-thought wrapped in im_start/im_end special tokens, then the real answer. See `docs/KNOWN_ISSUES.md#f1` for root cause + fix + test plan. Files likely touched: `PocketServe1/PocketServe1/MLXEngine.swift`, new `ThinkStripper` in `Packages/ModelKit` (+ tests).
-2. **F2 — Swift enum leak in error envelope (MED).** `HTTPServer` renders `"\(e)"` → JSON `message` contains `invalidRequest("…")`. Add `ServerAPIError.userMessage`, use at the two `/x/*` catch sites. Test in `XRoutesTests`.
+1. **F2 — Swift enum leak in error envelope (MED).** `HTTPServer` renders `"\(e)"` → JSON `message` contains `invalidRequest("…")`. Add `ServerAPIError.userMessage`, use at the two `/x/*` catch sites. Test in `XRoutesTests`.
 
 ## Not blocking merge (route to their phase)
 - **F3 keep-awake / AFM first-class** → Phase 2.5 (`docs/ROADMAP.md`).
