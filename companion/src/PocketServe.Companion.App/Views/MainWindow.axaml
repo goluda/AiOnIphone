@@ -1,22 +1,110 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:PocketServe.Companion.App.ViewModels"
+        xmlns:app="using:PocketServe.Companion.App"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
         x:Class="PocketServe.Companion.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="PocketServe.Companion.App">
+        Title="PocketServe Companion"
+        Width="800" Height="600"
+        MinWidth="480" MinHeight="400">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <TextBox Text="{Binding Greeting}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+    <Window.Resources>
+        <app:ChatRoleToBrushConverter x:Key="RoleToBrush" />
+        <app:ChatRoleToAlignmentConverter x:Key="RoleToAlignment" />
+        <app:ConnectedToBrushConverter x:Key="ConnectedToBrush" />
+    </Window.Resources>
 
+    <DockPanel Margin="12">
+
+        <!-- Connect bar -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,8">
+            <TextBox Grid.Column="0" Text="{Binding Host}" VerticalAlignment="Center"
+                   PlaceholderText="IP iPhona, np. 192.168.68.27"
+                   IsEnabled="{Binding IsStreaming, Converter={x:Static BoolConverters.Not}}" />
+            <TextBox Grid.Column="1" Width="64" Margin="8,0,0,0" VerticalAlignment="Center"
+                   Text="{Binding PortText}" PlaceholderText="port"
+                   IsEnabled="{Binding IsStreaming, Converter={x:Static BoolConverters.Not}}" />
+            <Ellipse Grid.Column="2" Width="12" Height="12" Margin="10,0,4,0" VerticalAlignment="Center"
+                   Fill="{Binding IsConnected, Converter={StaticResource ConnectedToBrush}}" />
+            <Button Grid.Column="3" MinWidth="96" Margin="6,0,0,0" VerticalAlignment="Center"
+                   Content="Połącz" Classes="accent"
+                   Command="{Binding ConnectCommand}"
+                   IsEnabled="{Binding CanConnect}"
+                   IsVisible="{Binding IsConnected, Converter={x:Static BoolConverters.Not}}" />
+            <Button Grid.Column="3" MinWidth="96" Margin="6,0,0,0" VerticalAlignment="Center"
+                   Content="Rozłącz"
+                   Command="{Binding DisconnectCommand}"
+                   IsVisible="{Binding IsConnected}" />
+        </Grid>
+
+        <!-- Model bar -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+            <ComboBox Grid.Column="0" HorizontalContentAlignment="Left" MaxWidth="420"
+                   ItemsSource="{Binding Models}"
+                   SelectedItem="{Binding SelectedModel}"
+                   DisplayMemberBinding="{Binding Id}"
+                   PlaceholderText="Wybierz model" />
+            <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="Gray"
+                      Text="{Binding SelectedModel.ContextWindow, StringFormat='ctx {0}'}" />
+            <Button Grid.Column="2" MinWidth="88" Margin="8,0,0,0" Content="Odśwież"
+                   Command="{Binding RefreshModelsCommand}"
+                   IsVisible="{Binding IsConnected}" />
+        </Grid>
+
+        <!-- Error banner -->
+        <Border DockPanel.Dock="Top" Background="#5C2E2E" CornerRadius="6" Padding="10,6" Margin="0,0,0,8"
+                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding ErrorText}" Foreground="#FFD7D7" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Input row -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+            <TextBox x:Name="InputBox" Grid.Column="0" Text="{Binding Draft}" AcceptsReturn="True"
+                   MinHeight="44" MaxHeight="120" PlaceholderText="Napisz wiadomość… (Enter = wyślij)" />
+            <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom">
+                <Button Content="Wyślij" MinWidth="88" Classes="accent"
+                      Command="{Binding SendCommand}"
+                      IsVisible="{Binding IsStreaming, Converter={x:Static BoolConverters.Not}}" />
+                <Button Content="Stop" MinWidth="88"
+                      Command="{Binding StopCommand}"
+                      IsVisible="{Binding IsStreaming}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Transcript -->
+        <ScrollViewer x:Name="TranscriptScroll">
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding Messages}" Padding="0,4">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding Role, Converter={StaticResource RoleToBrush}}"
+                                  CornerRadius="10" Padding="12,8" Margin="0,4"
+                                  HorizontalAlignment="{Binding Role, Converter={StaticResource RoleToAlignment}}"
+                                  MaxWidth="560">
+                                <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Live streaming bubble -->
+                <Border Background="Transparent"
+                        IsVisible="{Binding IsStreaming}"
+                        CornerRadius="10" Padding="12,8" Margin="0,4"
+                        HorizontalAlignment="Left" MaxWidth="560">
+                    <TextBlock TextWrapping="Wrap">
+                        <Run Text="{Binding StreamingText}" /><Run Text="&#x258C;" />
+                    </TextBlock>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+    </DockPanel>
 </Window>
