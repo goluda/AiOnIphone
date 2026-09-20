@@ -48,17 +48,17 @@ Layer rules respected: `OpenAICompat` stays Foundation-only (parser has no UIKit
 
 Static `List`, sections mirror README's endpoint table:
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/health` | health check |
-| GET | `/v1/models` | lista modeli |
-| POST | `/v1/chat/completions` | OpenAI shape, stream + JSON |
-| POST | `/v1/messages` | Anthropic shape, stream + JSON |
-| GET | `/x/models` | zarządzanie: lista |
-| POST | `/x/download` | zarządzanie: import |
-| GET | `/x/download/status` | zarządzanie: postęp |
-| POST | `/x/models/load` \| `/x/models/unload` | zarządzanie: silnik |
-| DELETE | `/x/models/{id}` | zarządzanie: usuń pliki |
+| Method | Path                                   | Notes                          |
+| ------ | -------------------------------------- | ------------------------------ |
+| GET    | `/health`                              | health check                   |
+| GET    | `/v1/models`                           | lista modeli                   |
+| POST   | `/v1/chat/completions`                 | OpenAI shape, stream + JSON    |
+| POST   | `/v1/messages`                         | Anthropic shape, stream + JSON |
+| GET    | `/x/models`                            | zarządzanie: lista             |
+| POST   | `/x/download`                          | zarządzanie: import            |
+| GET    | `/x/download/status`                   | zarządzanie: postęp            |
+| POST   | `/x/models/load` \| `/x/models/unload` | zarządzanie: silnik            |
+| DELETE | `/x/models/{id}`                       | zarządzanie: usuń pliki        |
 
 Header section: base URL `http://{address}:{port}` from `ServerModel` (live `@Published`), monospaced, `.textSelection(.enabled)` + copy button (UIPasteboard). Offline → grey "serwer wyłączony" note. Error-codes footnote (429 busy, 409 not-ready, 404 unknown model, 400 bad request).
 

@@ -12,6 +12,8 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                 if model.running { Text("\(model.address):\(model.port, format: .number.grouping(.never))").font(.system(.body, design: .monospaced)).textSelection(.enabled) }
                 NavigationLink("Modele") { ModelsView(vm: model.viewModel) }
+                NavigationLink("API") { EndpointsView(model: model) }
+                NavigationLink("Czat") { ChatView(model: model) }
             }.padding()
         }
         .task { _ = model.viewModel } // pre-kreacja VM poza ścieżką tapnięcia "Modele"
