@@ -37,6 +37,8 @@ Severity: **critical** (blocks device flow) · **high** (visible defect on every
 | —   | chunk cumulativity assumption (2.29.1 chunks are **incremental**)                    | `4586371` passthrough                                   |
 | —   | BackgroundGuard didn't cover MLX streams                                             | `ac29944`                                               |
 | —   | retry-import used stale text field instead of record repo                            | `ac29944`                                               |
+| R-1 | every Models button showed "download in progress" (shared `loadSlotBusy` flag; load/delete threw `downloadInProgress`) | `d0c7137` — per-operation `idle/loading/deleting` guard, distinct `loadInProgress`/`deleteInProgress` errors; wire token unchanged via bridge (`3a29846` UI) |
+| R-2 | HF downloader had no timeouts — a stalled download parked the coordinator forever | `3a29846` — URLSession config: 60 s request / 3600 s resource timeouts |
 | —   | Companion chat 400: chunked body invisible to iOS RequestParser                      | fix/companion-chunked-body — StringContent + CL; regression test asserts CL before body read |
 
 ## Residual minor (low priority, optional)
