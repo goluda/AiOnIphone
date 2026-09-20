@@ -21,7 +21,7 @@ Two additions to the iOS app (`PocketServe1`):
 
 - **Chat path: self-request over HTTP to `127.0.0.1:<port>`** (option A). Real request through `HTTPServer` = every chat turn also smoke-tests `/v1/chat/completions` + SSE end-to-end. ATS does not apply to literal loopback addresses; verify on simulator.
 - Chat direct-to-engine (B) rejected: bypasses server, duplicates dispatch logic, tests nothing. DI-client-with-mock (C) rejected: overkill.
-- SSE parsing lives in `Packages/OpenAICompat` as a pure, Mac-testable helper (chunk-boundary safe — same class of defect as BACKLOG F1).
+- SSE parsing: **reuse existing `SSEParser`** in `Packages/OpenAICompat/SSE.swift` (split-safe, comment-safe, multi-byte-safe — already tested in `SSETests`). No new parser file.
 
 ## Architecture
 
@@ -40,24 +40,9 @@ Layer rules respected: `OpenAICompat` stays Foundation-only (parser has no UIKit
 
 ## Components
 
-### 1. `SSEParser.swift` (Packages/OpenAICompat, NEW)
+### 1. `SSEParser` (Packages/OpenAICompat/SSE.swift — EXISTING, reused verbatim)
 
-```swift
-public struct SSEEvent: Equatable, Sendable {
-    public let event: String   // "message" | "content_block_delta" | "error" | ... ; default "message"
-    public let data: String    // raw JSON payload line(s), joined; "[DONE]" passthrough
-}
-
-public struct SSEParser {
-    public init()
-    public mutating func feed(_ chunk: Data) -> [SSEEvent]
-}
-```
-
-- Internal `String` buffer; append decoded chunk; emit complete events on blank-line separator (`\n\n`), tolerate `\r\n`.
-- Multi-line `data:` in one event → joined with `\n`. Lines starting `:` are comments (ignored).
-- Safe when a frame is split across chunks (the F1-class bug: never emit partial frames).
-- Stateless with respect to semantics: it only frames; JSON decoding is caller's job.
+`SSEParser.feed(Data) -> [String]` returns `data:` payloads: blank-line framed, safe across chunk boundaries, `:` comments ignored, `[DONE]` filtered out. Chat consumes it per-byte (`URLSession.bytes`), the proven pattern from `SSETests.testParserHandlesSplitAcrossFeeds`. JSON decoding is caller's job.
 
 ### 2. `EndpointsView.swift` (app target, NEW)
 
@@ -111,8 +96,7 @@ Add two `NavigationLink`s after "Modele": `"API"` → `EndpointsView(model: mode
 
 ## Testing
 
-- **Mac (CI-checkable):** `SSEParserTests` in `OpenAICompatTests` — single frame, split-tag-across-chunks, multi-line data, comment lines, `\r\n`, `[DONE]`, `error` event frame. (New file, ~6 tests → OpenAICompat 62→68.)
-- **Mac:** existing suites must stay green: ModelKit 22/22, OpenAICompat 62+6/68.
+- **Mac (CI-checkable):** existing suites stay green unchanged — ModelKit 22/22, OpenAICompat 62/62 (SSE framing already covered by SSETests; `Packages/` untouched by this feature).
 - **Simulator:** build green; manual: chat round-trip against built-in server (apple-afm), endpoints screen shows live URL.
 - **Device smoke (user):** chat with `apple-afm` and one `mlx:*` model; Stop button mid-stream; 409 when switching to unloaded mlx repo.
 
@@ -120,5 +104,5 @@ Add two `NavigationLink`s after "Modele": `"API"` → `EndpointsView(model: mode
 
 1. Chat window streams tokens live on device with `apple-afm` loaded.
 2. Endpoints screen lists all 10 routes (9 table rows, load/unload combined) + copyable base URL.
-3. `swift test` both packages green; simulator build green.
-4. Zero new dependencies; layer rules intact (verified by grep: no UIKit/ModelKit in OpenAICompat).
+3. `swift test` both packages green (unchanged counts); simulator build green.
+4. Zero new dependencies; `Packages/` unchanged; layer rules intact (verified by grep: no UIKit/ModelKit in OpenAICompat).
