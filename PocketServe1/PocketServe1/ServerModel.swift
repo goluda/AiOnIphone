@@ -15,17 +15,9 @@ import Combine
     override init() { server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared]) }
 
     func attach(extension: ServerExtension) {
-        ext = `extension`
-        let old = server // wymiana synchroniczna → start() widzi już serwer z ext
-        server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared], extension: `extension`)
-        guard running else { return }
-        let oldPort = port
-        Task { [weak self] in
-            guard let self else { return }
-            await old.stop()
-            guard self.running else { return } // użytkownik nacisnął Stop w trakcie restartu — nie wznawiaj nasłuchu
-            do { self.port = try await self.server.start(port: oldPort) } catch { self.running = false }
-        }
+        ext = `extension` // retain; serwer żyje ten sam — montaż /x/* przez setExtension, bez restartu nasłuchu
+        let server = server
+        Task { await server.setExtension(`extension`) }
     }
 
     func start() {

@@ -1,6 +1,8 @@
 # PocketServe — Run on iPhone (checklist dla człowieka)
 
-Pliki źródłowe są gotowe w `PocketServe/PocketServe/`. Xcode project **utwórz ręcznie** (brief Task 7, Step 1) — szkielet projektu nie jest w git.
+> **Zdezaktualizowane (Faza 2):** kanoniczne źródła żyją bezpośrednio w `PocketServe1/PocketServe1/` (PBXFileSystemSynchronizedRootGroup — Xcode kompiluje każdy plik tam automatycznie, kopiowanie nie jest potrzebne). Mirror `PocketServe/PocketServe/` usunięty. Instrukcje poniżej mają wartość historyczną; dla Fazy 2 patrz `RUN_ON_IPHONE_PHASE2.md`.
+
+Pliki źródłowe były w `PocketServe/PocketServe/`. Xcode project **utwórz ręcznie** (brief Task 7, Step 1) — szkielet projektu nie jest w git.
 
 ## 1. Nowy projekt w Xcode 27
 1. Xcode → **File → New → Project… → iOS → App**

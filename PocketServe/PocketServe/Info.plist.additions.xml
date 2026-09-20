@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Step 2 (brief): wklej te klucze do <dict> w wygenerowanym PocketServe/PocketServe/Info.plist.
-     Bez nich sandbox zablokuje serwer / Bonjour. -->
-<key>NSLocalNetworkUsageDescription</key>
-<string>Serwer AI dla Twojego komputera</string>
-<key>NSBonjourServices</key>
-<array><string>_oai._tcp</string></array>

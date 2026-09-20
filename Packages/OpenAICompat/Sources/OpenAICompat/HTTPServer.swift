@@ -3,7 +3,7 @@ import Network
 
 public actor HTTPServer {
     private let engines: [any InferenceEngine]
-    private let ext: ServerExtension?
+    private var ext: ServerExtension?
     private var listener: NWListener?
     private var busy = false
     public private(set) var port: UInt16?
@@ -12,6 +12,8 @@ public actor HTTPServer {
         self.engines = engines
         self.ext = ext
     }
+
+    public func setExtension(_ ext: ServerExtension?) { self.ext = ext } // montaż /x/* bez restartu nasłuchu
 
     public func start(port: UInt16) async throws -> UInt16 {
         let params = NWParameters.tcp

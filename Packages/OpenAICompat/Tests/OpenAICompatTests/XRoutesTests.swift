@@ -17,6 +17,22 @@ final class XRoutesTests: XCTestCase {
         XCTAssertEqual((r as? HTTPURLResponse)?.statusCode, 501)
     }
 
+    func testSetExtensionHotMountsXPathWithoutRestart() async throws {
+        let (s, c) = try await start(ext: nil) // nasłuch już działa bez /x/*
+        defer { Task { await s.stop() } }
+        let (_, r1) = try await c.data(from: await url(s, "/x/models"))
+        XCTAssertEqual((r1 as? HTTPURLResponse)?.statusCode, 501)
+        let port = await s.port!
+        let rec = "[{\"id\":\"mlx:a/b\",\"loaded\":false,\"state\":\"ready\"}]"
+        await s.setExtension(ServerExtension(download: DownloadHandler(
+            start: { _, _ in }, status: { Data() }, records: { Data(rec.utf8) },
+            load: { _ in }, unload: { _ in }, delete: { _ in }, memoryWarning: {}
+        ), extraModels: { [] }))
+        let (d, r2) = try await c.data(from: URL(string: "http://127.0.0.1:\(port)/x/models")!)
+        XCTAssertEqual((r2 as? HTTPURLResponse)?.statusCode, 200) // ten sam listener, bez rebindu
+        XCTAssertTrue(String(decoding: d, as: UTF8.self).contains("mlx:a/b"))
+    }
+
     func testGetModelsRecordsEndpoint() async throws {
         let rec = "[{\"id\":\"mlx:a/b\",\"loaded\":false,\"state\":\"ready\"}]"
         let ext = ServerExtension(download: DownloadHandler(

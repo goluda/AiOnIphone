@@ -14,6 +14,7 @@ struct ContentView: View {
                 NavigationLink("Modele") { ModelsView(vm: model.viewModel) }
             }.padding()
         }
+        .task { _ = model.viewModel } // pre-kreacja VM poza ścieżką tapnięcia "Modele"
         // Step 7 (brief): background-task guard — w tle utrzymuje zadanie do expiry, bez restartu żądań.
         .onChange(of: scenePhase) { _, phase in
             BackgroundGuard.shared.handle(phase, serverRunning: model.running)
