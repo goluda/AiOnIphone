@@ -4,3 +4,5 @@ xcuserdata/
 .superpowers/
 .swiftpm/
 .DS_Store
+bin/
+obj/

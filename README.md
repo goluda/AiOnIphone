@@ -13,7 +13,7 @@ Run a private, offline-first AI endpoint from a phone you already carry — no c
 - **`POST /v1/messages` (Anthropic-shape responses):** merged — see PR #1; device smoke passed 2026-09-20.
 - **In-app testing:** "API" screen (endpoint list + copyable base URL) and minimal **"Czat"** chat window (streams from the loaded model via loopback `/v1/chat/completions`) — implemented, pending manual device test.
 - **Phase 2.5 — always-on server (no screen-timeout kill):** not started.
-- **Phase 3 — macOS "Companion" client:** not started.
+- **Phase 3 — desktop "Companion" client:** **.NET 10 + Avalonia** (cross-platform macOS/Windows/Linux), in `companion/`. Connect by IP, model picker, streaming chat. Code + 41 Core tests green; device smoke pending. Runbook: [companion/RUN_COMPANION.md](companion/RUN_COMPANION.md).
 - **Phase 4 — public launch / English localization / App Store prep:** not started.
 
 Full phase plan: [docs/ROADMAP.md](docs/ROADMAP.md)

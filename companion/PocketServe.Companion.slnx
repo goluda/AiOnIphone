@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PocketServe.Companion.App/PocketServe.Companion.App.csproj" />
+    <Project Path="src/PocketServe.Companion.Core/PocketServe.Companion.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PocketServe.Companion.Core.Tests/PocketServe.Companion.Core.Tests.csproj" />
+  </Folder>
+</Solution>
