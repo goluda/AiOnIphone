@@ -1,22 +1,44 @@
-# PocketServe — kontekst projektu dla agentów
+# Agent Guide — PocketServe
 
-iOS app serwujący OpenAI-kompatybilny endpoint (LAN) z Apple AFM + modele MLX; klient: "Companion" na macOS (Faza 3).
+Read first. English is canonical for all docs, comments and commit messages. **Never write raw ChatML special-token literals into chat messages, prompts, commit messages or docs** — they can break model/agent communication. Refer to them descriptively, e.g. "im_start/im_end special tokens".
 
-## BACKLOG (prośby użytkownika — do zrealizowania w przyszłości)
-- [ ] **Blokada wygaszania ekranu**: przełącznik „ekran zawsze aktywny gdy serwer działa" (`UIApplication.shared.isIdleTimerDisabled`, reset przy stop/background). Bez tego wygaszenie telefonu wiesza serwer (potwierdzone na urządzeniu 2026-09-20).
-- [ ] **Serwowanie modeli Apple jako pełnoprawny wybór**: widoczna karta/selektor „Apple Intelligence (apple-afm)" w UI MODELE + gwarancja serwowania (status dostępności AFM, onboarding gdy wyłączony w ustawieniach). Dziś apple-afm działa implicit.
-- [ ] F1: `<|im_start|>` leak — Qwen3 chain-of-thought wylewa się do `content` i SSE; wyciąć span think w MLXEngine lub wyłączyć thinking w szablonie (potwierdzone live 2026-09-20).
-- [ ] F2: leak enuma w JSON — `"invalidRequest(\"...\")"` zamiast czystego komunikatu; opis `ServerAPIError` z associated values.
+## What this is
+iOS app serving an **OpenAI-compatible HTTP endpoint** on LAN from an iPhone:
+- `apple-afm` — Apple FoundationModels (built-in, zero download, implicit today — Phase 2.5 makes it a first-class selectable).
+- `mlx:<repo>` — MLX quantized models downloaded from Hugging Face (`mlx-community`); exactly one loaded at a time.
+Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:8080`. Plain HTTP, **no auth** — conscious decision, revisit before public launch (ROADMAP Phase 4b).
 
-## Konwencje
-- Źródła appki: **bezpośrednio `PocketServe1/PocketServe1/`** (PBXFileSystemSynchronizedRootGroup — kopiowanie/mirror NIE jest potrzebne; stary mirror `PocketServe/PocketServe/` usunięty w ca257d6).
-- Runbook: `PocketServe/RUN_ON_IPHONE_PHASE2.md` (device smoke §4).
-- Architektura A: `Packages/ModelKit` (bez UIKit/MLX), `Packages/OpenAICompat` (bez ModelKit — wstrzykiwany `ServerExtension`), MLXEngine tylko w targetcie iOS.
-- Ids: `mlx:<repo>` end-to-end; `apple-afm`; placeholder `mlx:none` nielista/nierutowalny.
+## Current state
+- `feat/pocketserve-phase2` = Phase 2 code, **19 commits ahead of master, NOT merged**.
+- Green on Mac: ModelKit **22/22**, OpenAICompat **50/50**; iOS Simulator `BUILD SUCCEEDED`.
+- Device smoke passed end-to-end (import→download→load→mlx chat→409/429→unload→delete), with defects found live.
+- **Start every new session from: [docs/HANDOFF-PHASE2-CLOSEOUT.md](docs/HANDOFF-PHASE2-CLOSEOUT.md)**.
 
-## Środowisko (quirks)
-- `/usr/local/bin/swift` i `rg` zepsute → zawsze `PATH=/usr/bin:$PATH swift ...`.
-- Testy: `PATH=/usr/bin:$PATH swift test --package-path Packages/ModelKit` (22/22), `.../OpenAICompat` (50/50).
+## BACKLOG (user-requested — carry across sessions, do not drop)
+- [ ] **F1 — think-span leak (HIGH):** Qwen3 emits its chain-of-thought wrapped in im_start/im_end special tokens *raw* into `content` and SSE on every mlx chat. Fix: strip the think span (streaming filter in `MLXEngine.stream`, chunk-boundary safe) or disable thinking via chat template / `GenerateParameters`. Add MLXEngine-level test using synthetic chunk sequences (simulate tags split across chunks). Confirmed live 2026-09-20.
+- [ ] **F2 — error message leak (MED):** error JSON `message` shows Swift enum dumps like `invalidRequest("model nie znaleziony")`. Fix: give `ServerAPIError` a `userMessage` accessor (associated-value text where present, else the `type` token) and send it in `HTTPServer` (`"\(e)"` → `e.userMessage`). 2026-09-20.
+- [ ] **Screen keep-awake (HIGH, moved into Phase 2.5):** screen timeout suspends the app and kills the server (confirmed live). Add toggle "Keep screen awake while serving" → `UIApplication.shared.isIdleTimerDisabled` (set on server start, reset on stop/background).
+- [ ] **Apple models first-class (MED):** visible "Apple Intelligence (apple-afm)" card in Models UI with availability status + onboarding when Apple Intelligence is off in system Settings.
+- [ ] **Translate the iPhone app to English (REQUIRED before public launch):** see [docs/LOCALIZATION.md](docs/LOCALIZATION.md) and ROADMAP Phase 4a. User intends a public release.
+- [ ] Phase 4b: LAN auth/pairing decision, free-space preflight, crash sweep, App Store assets.
+
+## Layer rules (enforced by review; CI cannot check the MLX parts)
+1. `Packages/ModelKit` — Foundation + CryptoKit only. No UIKit/MLX/OpenAICompat. Tests run on Mac.
+2. `Packages/OpenAICompat` — Foundation + Network only. **Never imports ModelKit** — management is injected via `ServerExtension`; bridging lives in the app (`ModelsViewModel.bridge(_:op:)`).
+3. App target `PocketServe1` — the only UIKit/SwiftUI/MLX/FoundationModels home.
+4. Model ids: `mlx:<repo>` end-to-end (record id, engine id, /v1/models, chat dispatch); `apple-afm`; placeholder `mlx:none` never listed, never routable.
+5. Error tokens (spec §5): load-not-ready `download_not_ready`, unload-not-loaded `model_not_loaded`, delete-loaded `model_loaded`, busy `server_busy`, memory `memory_pressure`; unknown-id: load→400, delete→404.
+
+## Environment quirks (this machine)
+- `/usr/local/bin/swift` and `rg` are broken shims → always `PATH=/usr/bin:$PATH swift …`; use built-in grep.
+- Tests: `PATH=/usr/bin:$PATH swift test --package-path Packages/ModelKit` / `.../OpenAICompat`.
 - Build: `xcodebuild -project PocketServe1/PocketServe1.xcodeproj -scheme PocketServe1 -destination 'generic/platform=iOS Simulator' build`.
--mlx pin: mlx-swift-examples 2.29.1 (MLXLLM+MLXLMCommon), mlx-swift 0.29.1; `chunk` inkrementalny; contextWindow=8192 (konserwatywna stała).
-- Device: iPhone 18 Pro Max `192.168.68.27:8080`, Bonjour `_oai._tcp.`; debug Xcode (GPU capture/validation) powoduje globalne lag — trzymać wyłączone w scheme.
+- Device: iPhone 18 Pro Max, `192.168.68.27:8080` (IP can change — re-scan via Bonjour `_oai._tcp._`).
+- **Keep Xcode scheme diagnostics OFF** (GPU Frame Capture: Disabled, Metal API Validation off) — they made the whole UI lag seconds per interaction; confirmed 2026-09-20.
+- Sources live directly in `PocketServe1/PocketServe1/` (synchronized root group — no mirroring; old `PocketServe/PocketServe/` mirror deleted in `ca257d6`).
+
+## Conventions
+- SwiftUI on iOS 26 target (Xcode 27 beta toolchain): `import Combine` explicitly when using `@Published`; `NetService(port: Int32)`.
+- mlx pins in pbxproj: mlx-swift-examples 2.29.1 (products MLXLLM + MLXLMCommon), mlx-swift 0.29.1 transitive. `chunk` is incremental → SSE passthrough. contextWindow constant 8192 (Qwen3 config allows more — confirm when convenient, not blocking).
+- HF: info API requires `?blobs=true` for sizes/lfs.oids; mlx fingerprint = `quantization` key in config.json (not the literal word "mlx").
+- Runbooks in `PocketServe/*.md`; phase specs/plans in `docs/superpowers/`; living docs at `docs/` top level.
