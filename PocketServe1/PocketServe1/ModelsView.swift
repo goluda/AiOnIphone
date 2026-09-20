@@ -14,8 +14,14 @@ struct ModelsView: View {
             Section("Import z Hugging Face") {
                 TextField("np. mlx-community/Qwen3-1.7B-4bit", text: $vm.repoInput)
                     .textInputAutocapitalization(.never).font(.system(.body, design: .monospaced))
-                Button("Import") { vm.importRepo() }
-                    .disabled(vm.status.state == .downloading || vm.status.state == .verifying)
+                HStack {
+                    Button("Import") { vm.importRepo() }
+                    Button {
+                        vm.showPresetPicker = true
+                    } label: { Image(systemName: "sparkles") }
+                    Spacer()
+                }
+                .disabled(vm.status.state == .downloading || vm.status.state == .verifying)
                 if vm.status.state == .downloading || vm.status.state == .verifying {
                     ProgressView(value: Double(vm.status.bytesDone), total: Double(max(1, vm.status.bytesTotal)))
                     Text("\(vm.status.state.rawValue) \(format(vm.status.bytesDone))/\(format(vm.status.bytesTotal))").font(.caption)
@@ -39,6 +45,14 @@ struct ModelsView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog("Co pobrać?", isPresented: $vm.showPresetPicker, titleVisibility: .visible) {
+            ForEach(ModelsViewModel.presets) { p in
+                Button("\(p.name) — \(format(p.approxBytes))") { vm.pickPreset(p) }
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Przykładowe modele ze sklepu mlx-community. Rozmiary orientacyjne.")
         }
         .navigationTitle("Modele")
         .navigationSubtitle(vm.records.first(where: { $0.loaded })?.repo ?? "tylko apple-afm") // spec §6: nagłówek = załadowany model albo fallback

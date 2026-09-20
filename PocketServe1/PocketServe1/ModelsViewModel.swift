@@ -13,7 +13,23 @@ struct MLXLoading: ModelLoading {
     var loadedId: String? { MLXEngine.loadedId }
 }
 
+struct ModelPreset: Identifiable {
+    let repo: String
+    let name: String
+    let approxBytes: Int64
+    let note: String
+    var id: String { repo }
+}
+
 @MainActor final class ModelsViewModel: ObservableObject {
+    // Presety zweryfikowane live na HF 2026-09-20 (rozmiary = suma .safetensors, ?blobs=true).
+    static let presets: [ModelPreset] = [
+        ModelPreset(repo: "mlx-community/Qwen3-0.6B-4bit", name: "Qwen3 0.6B 4bit", approxBytes: 335_000_000, note: "najszybszy start, testowy"),
+        ModelPreset(repo: "mlx-community/Qwen3-1.7B-4bit", name: "Qwen3 1.7B 4bit", approxBytes: 968_000_000, note: "dobry polski, polecany na start"),
+        ModelPreset(repo: "mlx-community/gemma-3n-E2B-it-4bit", name: "Gemma 3n E2B 4bit", approxBytes: 4_463_000_000, note: "mniejszy, jakość wyższa"),
+        ModelPreset(repo: "mlx-community/gemma-3n-E4B-it-4bit", name: "Gemma 3n E4B 4bit", approxBytes: 5_819_000_000, note: "największy — tuż pod limitem 6 GB"),
+    ]
+    @Published var showPresetPicker = false
     @Published var records: [ModelRecord] = []
     @Published var status = DownloadStatus(state: .idle, repo: nil, bytesDone: 0, bytesTotal: 0)
     @Published var alert: String?
@@ -83,6 +99,7 @@ struct MLXLoading: ModelLoading {
             extraModels: { [] })
     }
     func refresh() async { records = await store.records(); status = await coordinator.currentStatus() }
+    func pickPreset(_ p: ModelPreset) { repoInput = p.repo; showPresetPicker = false; importRepo(repo: p.repo) }
     func importRepo(repo: String? = nil) { // I-4: retry z karty failed podaje repo rekordu; fallback = repoInput
         let repo = (repo ?? repoInput).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !repo.isEmpty else { return }
