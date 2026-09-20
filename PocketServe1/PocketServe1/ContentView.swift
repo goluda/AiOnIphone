@@ -11,9 +11,10 @@ struct ContentView: View {
                 Button(model.running ? "Stop" : "Start") { model.running ? model.stop() : model.start() }
                     .buttonStyle(.borderedProminent)
                 if model.running { Text("\(model.address):\(model.port, format: .number.grouping(.never))").font(.system(.body, design: .monospaced)).textSelection(.enabled) }
-                NavigationLink("Modele") { ModelsView(vm: model.viewModel) }
+                NavigationLink("Models") { ModelsView(vm: model.viewModel) }
                 NavigationLink("API") { EndpointsView(model: model) }
-                NavigationLink("Czat") { ChatView(model: model) }
+                NavigationLink("Chat") { ChatView(model: model) }
+                if model.running { RequestLogView() }
             }.padding()
         }
         .task { _ = model.viewModel } // pre-kreacja VM poza ścieżką tapnięcia "Modele"

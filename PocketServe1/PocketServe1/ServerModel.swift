@@ -12,7 +12,9 @@ import Combine
     private var netService: NetService?
     private(set) lazy var viewModel = ModelsViewModel(serverModel: self) // init VM woła attach — oficjalny kanał montażu
 
-    override init() { server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared]) }
+    override init() {
+        server = HTTPServer(engines: [AFMEngine(), MLXEngine.shared]) { await RequestLog.shared.record($0) }
+    }
 
     func attach(extension: ServerExtension) {
         ext = `extension` // retain; serwer żyje ten sam — montaż /x/* przez setExtension, bez restartu nasłuchu
