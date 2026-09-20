@@ -6,11 +6,17 @@ public actor HTTPServer {
     private var ext: ServerExtension?
     private var listener: NWListener?
     private var busy = false
+    private let onRequest: (@Sendable (RequestEvent) async -> Void)?
+    // per-connection kontekst trasy: start/status/model — map, bo trasy mogą się przeplatać (actor await points)
+    private struct RouteCtx { var start = DispatchTime.now(); var status = 0; var model: String? }
+    private var routeCtx: [ObjectIdentifier: RouteCtx] = [:]
     public private(set) var port: UInt16?
 
-    public init(engines: [any InferenceEngine], extension ext: ServerExtension? = nil) {
+    public init(engines: [any InferenceEngine], extension ext: ServerExtension? = nil,
+                onRequest: (@Sendable (RequestEvent) async -> Void)? = nil) {
         self.engines = engines
         self.ext = ext
+        self.onRequest = onRequest
     }
 
     public func setExtension(_ ext: ServerExtension?) { self.ext = ext } // montaż /x/* bez restartu nasłuchu
@@ -68,6 +74,9 @@ public actor HTTPServer {
     }
 
     private func route(_ req: HTTPRequest, _ conn: NWConnection) async {
+        let key = ObjectIdentifier(conn)
+        routeCtx[key] = RouteCtx()
+        defer { fire(key, req) }
         if req.method == "GET", req.path == "/health" {
             sendJSON(conn, 200, Data(#"{"status":"ok"}"#.utf8)); return
         }
@@ -126,6 +135,7 @@ guard req.method == "POST", req.path == "/v1/chat/completions" || req.path == "/
         let request: ChatCompletionRequest
         do { request = try JSONDecoder().decode(ChatCompletionRequest.self, from: req.body) }
         catch { sendError(conn, 400, "invalid_request_error", wire: wire); return }
+        routeCtx[key]?.model = request.model
         await runInference(request, conn, wire: wire)
     }
 
@@ -152,6 +162,7 @@ guard req.method == "POST", req.path == "/v1/chat/completions" || req.path == "/
         let promptTokens = TokenCounter.approximate(prompt)
         if request.stream {
             let header = Data("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n".utf8)
+            routeCtx[ObjectIdentifier(conn)]?.status = 200 // nagłówek wysłany — even mid-stream throw keeps 200 (honest)
             conn.send(content: header, completion: .contentProcessed { _ in })
             do {
                 if wire == .anthropic {
@@ -215,8 +226,16 @@ guard req.method == "POST", req.path == "/v1/chat/completions" || req.path == "/
     }
 
     private func sendRaw(_ conn: NWConnection, _ status: Int, _ body: Data, type: String) {
+        routeCtx[ObjectIdentifier(conn)]?.status = status // single chokepoint for all non-SSE responses
         let h = "HTTP/1.1 \(status) \r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
         conn.send(content: Data(h.utf8) + body, isComplete: true, completion: .contentProcessed { _ in conn.cancel() })
+    }
+
+    private func fire(_ key: ObjectIdentifier, _ req: HTTPRequest) {
+        guard let onRequest, let ctx = routeCtx.removeValue(forKey: key) else { return }
+        let ms = Int((DispatchTime.now().uptimeNanoseconds - ctx.start.uptimeNanoseconds) / 1_000_000)
+        let event = RequestEvent(method: req.method, path: req.path, status: ctx.status, durationMs: ms, model: ctx.model)
+        Task { await onRequest(event) }
     }
 
     private static func decodeId(_ body: Data) throws -> String {
