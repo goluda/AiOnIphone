@@ -3,6 +3,7 @@ import ModelKit
 
 struct ModelsView: View {
     @StateObject var vm: ModelsViewModel
+    @State private var pendingDelete: String?
     var body: some View {
         List {
             if vm.memoryWarning {
@@ -30,9 +31,15 @@ struct ModelsView: View {
             Section("Models") {
                 if vm.records.isEmpty { Text("No models downloaded yet").foregroundStyle(.secondary) }
                 ForEach(vm.records, id: \.id) { rec in
-                    ModelRow(rec: rec, vm: vm)
+                    ModelRow(rec: rec, vm: vm, requestDelete: { pendingDelete = $0 })
                 }
             }
+        }
+        .confirmationDialog("Delete model files?", isPresented: .init(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
+            Button("Delete files", role: .destructive) { if let id = pendingDelete { vm.deleteFiles(id) }; pendingDelete = nil }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("Removes downloaded files from this device. Re-import from Hugging Face anytime.")
         }
         .confirmationDialog("Which model to import?", isPresented: $vm.showPresetPicker, titleVisibility: .visible) {
             ForEach(ModelsViewModel.presets) { p in
@@ -53,7 +60,7 @@ struct ModelsView: View {
 private struct ModelRow: View {
     let rec: ModelRecord
     @ObservedObject var vm: ModelsViewModel
-    @State private var confirmDelete = false
+    var requestDelete: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -66,15 +73,13 @@ private struct ModelRow: View {
             }
             Text("\(rec.quant ?? "?") · \(fmt(rec.bytesOnDisk))").font(.caption).foregroundStyle(.secondary)
             HStack {
-                if rec.loaded { Button("Unload") { vm.unload(rec.id) } }
-                else if rec.state == .ready { Button(vm.loadingId == rec.id ? "Loading…" : "Load") { vm.load(rec.id) }.disabled(vm.loadingId != nil) }
-                if rec.state == .failed { Button("Retry import") { vm.importRepo(repo: rec.repo) } }
+                if rec.loaded { Button("Unload") { vm.unload(rec.id) }.buttonStyle(.bordered) }
+                else if rec.state == .ready { Button(vm.loadingId == rec.id ? "Loading…" : "Load") { vm.load(rec.id) }.buttonStyle(.bordered).disabled(vm.loadingId != nil) }
+                if rec.state == .failed { Button("Retry import") { vm.importRepo(repo: rec.repo) }.buttonStyle(.bordered) }
                 Spacer()
-                Button("Delete", role: .destructive) { confirmDelete = true }
-                    .disabled(vm.deletingId == rec.id || rec.loaded)
+                if vm.deletingId == rec.id { Text("Deleting…").font(.caption).foregroundStyle(.secondary) }
             }
         }
-        .contentShape(Rectangle())
         .swipeActions(edge: .leading) {
             if rec.loaded {
                 Button("Unload") { vm.unload(rec.id) }.tint(.orange)
@@ -84,14 +89,8 @@ private struct ModelRow: View {
             }
         }
         .swipeActions(edge: .trailing) {
-            Button("Delete", role: .destructive) { confirmDelete = true }
+            Button("Delete", role: .destructive) { requestDelete(rec.id) }
                 .disabled(vm.deletingId == rec.id || rec.loaded)
-        }
-        .confirmationDialog("Delete model files?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete files", role: .destructive) { vm.deleteFiles(rec.id) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Removes downloaded files from this device. Re-import from Hugging Face anytime.")
         }
     }
 
