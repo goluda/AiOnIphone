@@ -17,6 +17,10 @@ Severity: **critical** (blocks device flow) · **high** (visible defect on every
 - **Confirmed live 2026-09-20:** phone auto-dim → iOS suspends the app → `NWListener` dead (curl 000). Wakes → server gone (app must restart it).
 - **Fix:** `UIApplication.shared.isIdleTimerDisabled = true` while serving + user toggle "Keep screen awake while serving" (Phase 2.5 scope, see ROADMAP).
 
+### F4 — RequestParser ignores `Transfer-Encoding: chunked` (MED)
+- **Seen live 2026-09-20 (Companion):** .NET `JsonContent` posts chunked; parser computes `need` only from `content-length` → body parses as empty → chat POSTs fail `400 invalid_request_error`. Proof: raw capture shows `Transfer-Encoding: chunked` + `iPhone + JsonContent: 400` vs `StringContent → 200`.
+- **Client-side fixed** (Companion serializes with Content-Length). **Server-side open:** decode chunked framing in `RequestParser.receive` (or reject chunked explicitly with a clear `411 Length Required`). Any chunked client (curl `-H 'Transfer-Encoding: chunked'`, other SDKs) currently gets a misleading 400.
+
 ### Auth gap (by design → revisit Phase 4b)
 - Plain HTTP, **no auth**, LAN-only assumption. Before public launch decide: pairing code / bearer token / explicit accepted-risk doc.
 
@@ -33,6 +37,9 @@ Severity: **critical** (blocks device flow) · **high** (visible defect on every
 | —   | chunk cumulativity assumption (2.29.1 chunks are **incremental**)                    | `4586371` passthrough                                   |
 | —   | BackgroundGuard didn't cover MLX streams                                             | `ac29944`                                               |
 | —   | retry-import used stale text field instead of record repo                            | `ac29944`                                               |
+| R-1 | every Models button showed "download in progress" (shared `loadSlotBusy` flag; load/delete threw `downloadInProgress`) | `d0c7137` — per-operation `idle/loading/deleting` guard, distinct `loadInProgress`/`deleteInProgress` errors; wire token unchanged via bridge (`3a29846` UI) |
+| R-2 | HF downloader had no timeouts — a stalled download parked the coordinator forever | `3a29846` — URLSession config: 60 s request / 3600 s resource timeouts |
+| —   | Companion chat 400: chunked body invisible to iOS RequestParser                      | fix/companion-chunked-body — StringContent + CL; regression test asserts CL before body read |
 
 ## Residual minor (low priority, optional)
 - **M-1** resume progress bar can undercount `.part` bytes on resume (cosmetic).

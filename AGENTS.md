@@ -16,11 +16,14 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 - `feat/pocketserve-phase2` = Phase 2 code, **19 commits ahead of master, NOT merged**.
 - Green on Mac: ModelKit **22/22**, OpenAICompat **50/50**; iOS Simulator `BUILD SUCCEEDED`.
 - Device smoke passed end-to-end (import→download→load→mlx chat→409/429→unload→delete), with defects found live.
+- `POST /v1/messages` (Anthropic shape) merged (PR #1). In-app **Czat** + **API** screens implemented (`feat/inapp-endpoints-chat`) — manual device test pending.
+- **Phase 3 Companion re-pointed to .NET Avalonia** (cross-platform, user decision 2026-09-20): code in `companion/`, **merged to `main`** (PR #3). Core 42/42 tests green, app builds & launches on Mac. **Device smoke passed 2026-09-20** (connect, `apple-afm` chat, streaming) — first live run 400'd because .NET `HttpClient` sends chunked bodies and iOS `RequestParser` honors only `Content-Length`; fixed client-side with `StringContent` (PR #4). Spec/plan under `docs/superpowers/` (`2026-09-20-avalonia-companion*`).
 - **Start every new session from: [docs/HANDOFF-PHASE2-CLOSEOUT.md](docs/HANDOFF-PHASE2-CLOSEOUT.md)**.
 
 ## BACKLOG (user-requested — carry across sessions, do not drop)
 - [ ] **F1 — think-span leak (HIGH):** Qwen3 emits its chain-of-thought wrapped in im_start/im_end special tokens *raw* into `content` and SSE on every mlx chat. Fix: strip the think span (streaming filter in `MLXEngine.stream`, chunk-boundary safe) or disable thinking via chat template / `GenerateParameters`. Add MLXEngine-level test using synthetic chunk sequences (simulate tags split across chunks). Confirmed live 2026-09-20.
 - [ ] **F2 — error message leak (MED):** error JSON `message` shows Swift enum dumps like `invalidRequest("model nie znaleziony")`. Fix: give `ServerAPIError` a `userMessage` accessor (associated-value text where present, else the `type` token) and send it in `HTTPServer` (`"\(e)"` → `e.userMessage`). 2026-09-20.
+- [ ] **F4 — chunked bodies rejected (MED):** `RequestParser` computes expected body size from `content-length` only; any `Transfer-Encoding: chunked` client (curl `-d` over http/1.1 no-CL, some HTTP stacks) gets empty body → 400 `invalid_request_error`. Companion fixed client-side (PR #4); server should decode chunked or return 411. 2026-09-20.
 - [ ] **Screen keep-awake (HIGH, moved into Phase 2.5):** screen timeout suspends the app and kills the server (confirmed live). Add toggle "Keep screen awake while serving" → `UIApplication.shared.isIdleTimerDisabled` (set on server start, reset on stop/background).
 - [ ] **Apple models first-class (MED):** visible "Apple Intelligence (apple-afm)" card in Models UI with availability status + onboarding when Apple Intelligence is off in system Settings.
 - [ ] **Translate the iPhone app to English (REQUIRED before public launch):** see [docs/LOCALIZATION.md](docs/LOCALIZATION.md) and ROADMAP Phase 4a. User intends a public release.
@@ -32,6 +35,7 @@ Consumed by a macOS "Companion" client (Phase 3). Bonjour: `_oai._tcp.` on `:808
 3. App target `PocketServe1` — the only UIKit/SwiftUI/MLX/FoundationModels home.
 4. Model ids: `mlx:<repo>` end-to-end (record id, engine id, /v1/models, chat dispatch); `apple-afm`; placeholder `mlx:none` never listed, never routable.
 5. Error tokens (spec §5): load-not-ready `download_not_ready`, unload-not-loaded `model_not_loaded`, delete-loaded `model_loaded`, busy `server_busy`, memory `memory_pressure`; unknown-id: load→400, delete→404.
+6. `companion/` (.NET 10 Avalonia desktop client): `PocketServe.Companion.Core` = BCL-only (System.Net.Http / System.Text.Json, zero Avalonia refs); `PocketServe.Companion.App` = Avalonia UI consuming Core. English code/comments, Polish user-facing UI strings. Build/test: `dotnet test companion/PocketServe.Companion.slnx`.
 
 ## Environment quirks (this machine)
 - `/usr/local/bin/swift` and `rg` are broken shims → always `PATH=/usr/bin:$PATH swift …`; use built-in grep.

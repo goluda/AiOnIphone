@@ -57,14 +57,23 @@ Na iPhonie: Start serwera → **Modele** (NavigationLink) → kolejno:
 3. **Chat MLX**:
    `curl -N http://<IP>:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"mlx:mlx-community/Qwen3-1.7B-4bit","messages":[{"role":"user","content":"Napisz wiersz o Wiśle"}],"stream":true}'`
    → tokeny SSE → `data: [DONE]`. Bez strumienia (`stream:false`) → JSON `message.content` + `usage`.
-4. **409 przed załadowaniem** (przed krokiem 2 albo po kroku 5): model `mlx:coh/any` →
+3a. **Messages (Anthropic-shape)** — ten sam silnik, endpoint `/v1/messages`:
+   `curl -N http://<IP>:8080/v1/messages -H 'Content-Type: application/json' -d '{"model":"mlx:mlx-community/Qwen3-1.7B-4bit","messages":[{"role":"user","content":"Napisz wiersz o Wiśle"}],"stream":true}'`
+   → eventy `message_start`/`content_block_start`/`ping`/`content_block_delta`…/`content_block_stop`/`message_delta`/`message_stop`; **brak** `[DONE]`.
+   Bez strumienia (`stream:false`) → JSON `"type":"message"`, `content[0].text`, `stop_reason:"end_turn"`, `usage.input_tokens/output_tokens`.
+   Zły id z prefiksem `mlx:` → 409 `model_not_ready` w envelope `{"type":"error",...}`.
+3b. **Czat w aplikacji** (test bez Maca): ekran główny → **Czat** → picker modelu (domyślnie `apple-afm`) → wyślij wiadomość →
+   tokeny pojawiają się strumieniowo w dymce z kursorem „▌"; **Stop** w trakcie przerywa strumień bez wywrotki.
+   Przy wyłączonym serwerze → placeholder „Serwer wyłączony" + przycisk start. **API** (ekran główny) → lista endpointów,
+   base URL do skopiowania; przy załadowanym mlx → czat na mlx działa tak samo jak curl z kroku 3.
+5. **409 przed załadowaniem** (przed krokiem 2 albo po kroku 6): model `mlx:coh/any` →
    `HTTP 409` z `"type":"model_not_ready"` (NIE 404 — prefiks `mlx:` jest czyj).
    Obok: `apple-afm` działa dalej; zły id bez prefiksu → 404 jak w Fazie 1.
-5. **Odładuj** → badge znika, `mlx:...` znika z `/v1/models`, chat na nim → 409.
-6. **Single-flight**: dwa równoległe chat (jeden mlx) → drugi dostaje `429 server_busy`.
-7. **Memory pressure**: załaduj duży model → obróć/obciąż urządzenie (lub Xcode Debug → Simulate Memory
+6. **Odładuj** → badge znika, `mlx:...` znika z `/v1/models`, chat na nim → 409.
+7. **Single-flight**: dwa równoległe chat (jeden mlx) → drugi dostaje `429 server_busy`.
+8. **Memory pressure**: załaduj duży model → obróć/obciąż urządzenie (lub Xcode Debug → Simulate Memory
    Warning na symulatorze) → banner „Niska pamięć…" + auto-unload (badge znika).
-8. **Usuń pliki**: przycisk nieaktywny gdy ZAŁADOWANY; po odładowaniu → rekord znika,
+9. **Usuń pliki**: przycisk nieaktywny gdy ZAŁADOWANY; po odładowaniu → rekord znika,
    `curl -X DELETE http://<IP>:8080/x/models/mlx%3A<repo>` → `{"deleted":true}`.
 Uwaga: otwarcie **Modele** przy działającym serwerze = chwilny restart nasłuchu na tym samym porcie
 (attach wymienia rejestr silników) — żądania w tym oknie ~ms mogą wypaść; odpytaj ponownie.

@@ -104,6 +104,33 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
         XCTAssertEqual(String(data: data, encoding: .utf8), "{\"status\":\"ok\"}")
     }
+    // mini-log: onRequest emituje jedno zdarzenie per obsłużone żądanie (metoda/status/model/czas)
+    func testRequestEventsRecordedPerRequest() async throws {
+        actor Collector { var events: [RequestEvent] = []; func add(_ e: RequestEvent) { events.append(e) } }
+        let collector = Collector()
+        let s = HTTPServer(engines: [MockEngine()]) { await collector.add($0) }
+        let port = try await s.start(port: 0); defer { Task { await s.stop() } }
+        _ = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/health")!)
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
+        req.httpMethod = "POST"
+        req.httpBody = try JSONEncoder().encode(ChatCompletionRequest(model: "mock", messages: [ChatMessage(role: "user", content: "x")]))
+        _ = try await URLSession.shared.data(for: req)
+        _ = try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/nope")!)
+        let deadline = Date().addingTimeInterval(2) // bez sztywnego sleep — poll do wypelnienia
+        var events: [RequestEvent] = []
+        while Date() < deadline {
+            events = await collector.events
+            if events.count >= 3 { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(events.first { $0.path == "/health" }?.status, 200)
+        XCTAssertEqual(events.first { $0.path == "/health" }?.method, "GET")
+        let chat = events.first { $0.path == "/v1/chat/completions" }
+        XCTAssertEqual(chat?.status, 200)
+        XCTAssertEqual(chat?.model, "mock")
+        XCTAssertEqual(events.first { $0.path == "/nope" }?.status, 404)
+        XCTAssertTrue(events.allSatisfy { $0.durationMs >= 0 })
+    }
     func testHealth200WhileChatInFlight() async throws {
         let s = HTTPServer(engines: [MockEngine(latency: .milliseconds(150))])
         let port = try await s.start(port: 0); defer { Task { await s.stop() } }

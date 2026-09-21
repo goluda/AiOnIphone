@@ -2,9 +2,10 @@
 
 **User intent (2026-09-20):** the iPhone app will be released **publicly**, so the UI must be **English by default**. Keep Polish as a secondary locale. English is already canonical for docs/comments/commits.
 
-## Current state
-- No localization infrastructure: zero `.strings` / `.xcstrings` catalogs; `Info.plist` has **no** `CFBundleDevelopmentRegion` / `CFBundleLocalizations`.
-- UI is **hardcoded Polish**. Inventory (real strings, 2026-09-20):
+## Current state (updated 2026-09-20 — `feat/ios-ui-polish`)
+- **In-place English done:** every user-facing literal in the app target is now English (views, alerts, errors, `humanize`, `NSError` descriptions, bridge messages). Gate: `grep -rn '[ąćęłńóśźż]' PocketServe1/PocketServe1/*.swift` → zero hits in string literals. `Info.plist` now sets `CFBundleDevelopmentRegion = en`.
+- **Deferred to this phase (catalogs):** no `.strings` / `.xcstrings` catalogs yet; Polish becomes a secondary `pl` locale via `Localizable.xcstrings` in Phase 4b. Comments in files untouched by the polish branch may still be Polish (Phase 4a cleanup).
+- Historic inventory (translated in place, kept for reference):
 
 | File | Polish strings to localize |
 |---|---|

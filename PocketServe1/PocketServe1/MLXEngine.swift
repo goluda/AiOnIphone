@@ -84,7 +84,7 @@ final class MLXEngine: InferenceEngine, @unchecked Sendable {
             let task = Task {
                 defer { Self.releaseStream(once) } // punkty terminalne do/catch
                 guard let container = Self.lock.withLock({ Self._container }) else {
-                    continuation.finish(throwing: NSError(domain: "mlx", code: 2, userInfo: [NSLocalizedDescriptionKey: "model nie załadowany"])); return
+                    continuation.finish(throwing: NSError(domain: "mlx", code: 2, userInfo: [NSLocalizedDescriptionKey: "model not loaded"])); return
                 }
                 let gp = GenerateParameters(maxTokens: params.maxTokens, temperature: Float(params.temperature))
                 do {

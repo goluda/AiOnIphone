@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ServerAPIError: Error {
+public enum ServerAPIError: Error, Equatable {
     case invalidRequest(String), downloadInProgress, notReady, notLoaded, notFound, modelLoaded, memoryPressure, failed(String)
     public var httpStatus: Int {
         switch self {

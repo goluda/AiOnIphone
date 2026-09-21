@@ -6,14 +6,21 @@
 //
 
 import Testing
+import OpenAICompat
+import ModelKit
 @testable import PocketServe1
 
 struct PocketServe1Tests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @Test func humanizeDistinguishesLoadFromDelete() {
+        #expect(ModelsViewModel.humanize(.loadInProgress) == "Model is already loading")
+        #expect(ModelsViewModel.humanize(.deleteInProgress) == "Cannot delete — another operation in progress")
+        #expect(ModelsViewModel.humanize(.downloadInProgress) == "Download already in progress")
+    }
+
+    @Test func bridgeKeepsWireTokenForNewOps() {
+        #expect(ModelsViewModel.bridge(.loadInProgress, op: .load) == .downloadInProgress)
+        #expect(ModelsViewModel.bridge(.deleteInProgress, op: .delete) == .downloadInProgress)
     }
 
 }

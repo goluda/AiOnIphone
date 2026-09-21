@@ -1,7 +1,7 @@
 import Foundation
 
 public enum DownloadAPIError: Error, Equatable {
-    case invalidRequest(String), downloadInProgress, notReady, notLoaded, notFound, memoryPressure, downloadFailed(String), http(Int), io(String)
+    case invalidRequest(String), downloadInProgress, loadInProgress, deleteInProgress, notReady, notLoaded, notFound, memoryPressure, downloadFailed(String), http(Int), io(String)
 }
 
 public protocol ModelLoading: Sendable {
@@ -24,7 +24,9 @@ public actor DownloadCoordinator: DownloadAPI {
     private let downloader: HFDownloader?
     private let store: ModelStore
     private let loader: ModelLoading
-    private var loadSlotBusy = false
+    // per-operation guard: load i delete wyłączają się wzajemnie; start jest osobno (downloader.inProgress)
+    private enum Operation { case idle, loading, deleting }
+    private var operation: Operation = .idle
 
     public init(downloader: HFDownloader?, store: ModelStore, loader: ModelLoading) {
         self.downloader = downloader; self.store = store; self.loader = loader
@@ -55,9 +57,12 @@ public actor DownloadCoordinator: DownloadAPI {
     public func records() async -> [ModelRecord] { await store.records() }
 
     public func load(id: String) async throws {
-        guard !loadSlotBusy else { throw DownloadAPIError.downloadInProgress }
-        loadSlotBusy = true
-        defer { loadSlotBusy = false }
+        switch operation {
+        case .loading: throw DownloadAPIError.loadInProgress
+        case .deleting: throw DownloadAPIError.deleteInProgress
+        case .idle: operation = .loading
+        }
+        defer { operation = .idle }
         switch await store.canLoad(id) {
         case .unknown: throw DownloadAPIError.notFound
         case .notReady: throw DownloadAPIError.notReady
@@ -78,9 +83,12 @@ public actor DownloadCoordinator: DownloadAPI {
     }
 
     public func delete(id: String) async throws {
-        guard !loadSlotBusy else { throw DownloadAPIError.downloadInProgress }
-        loadSlotBusy = true
-        defer { loadSlotBusy = false }
+        switch operation {
+        case .deleting: throw DownloadAPIError.deleteInProgress
+        case .loading: throw DownloadAPIError.loadInProgress
+        case .idle: operation = .deleting
+        }
+        defer { operation = .idle }
         guard let rec = (await store.records()).first(where: { $0.id == id }) else { throw DownloadAPIError.notFound }
         guard !rec.loaded else { throw DownloadAPIError.notLoaded }
         let dir = store.root.appendingPathComponent("models").appendingPathComponent(RepoValidator.safeDirName(rec.repo))
